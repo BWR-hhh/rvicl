@@ -929,4 +929,3 @@ TASK_VIDEO_MIN_FULL = """A demonstration of this task is available: call `view_t
 It is the complete video, every frame in time order: each image shows one second of consecutive
 frames, left to right and top to bottom; each frame is the agentview camera (top) and the wrist
 camera (bottom)."""
-
