@@ -30,8 +30,7 @@ benchmark_patches/           task files for three LIBERO-PRO tasks, installed by
 
 ## Planner API
 
-The planner is an LLM reached with your own credentials; nothing in this repository carries a
-key or an endpoint. Copy `.env.example` to `.env`, fill it in and `source` it before running:
+Copy `.env.example` to `.env`, fill it in and `source` it before running:
 
 | variable | meaning |
 |---|---|
