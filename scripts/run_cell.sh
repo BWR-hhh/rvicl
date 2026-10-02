@@ -14,7 +14,6 @@ MEMORY="${RVICL_MEMORY_DIR:-$ROOT/memory/libero}"
 SUITE="$1"; TASK="$2"; SEED="$3"; shift 3
 OUT="$ROOT/runs/$(date +%Y%m%d_%H%M%S)_${SUITE}_t${TASK}_s${SEED}"
 mkdir -p "$OUT"
-python "$HERE/scripts/check_final_prompts.py" libero --quiet
 ENDPOINTS=()
 [ -n "${RPENT_VLA_ENDPOINT:-}" ] && ENDPOINTS+=(--vla-endpoint "$RPENT_VLA_ENDPOINT")
 [ -n "${RPENT_SAM3_ENDPOINT:-}" ] && ENDPOINTS+=(--sam3-endpoint "$RPENT_SAM3_ENDPOINT")
@@ -24,7 +23,7 @@ exec rpent --robot libero --libero-type "${LIBERO_TYPE:-pro}" \
   --suite "$SUITE" --task "$TASK" --seed "$SEED" \
   --planner "${RVICL_PLANNER:-codex}" --model "${RVICL_MODEL:-gpt-6-astra}" --reasoning-effort "${RVICL_REASONING_EFFORT:-low}" \
   --memory-profile local --memory-dir "$MEMORY" \
-  --task-video-dir "$STORE" --task-video-mode both \
+  --task-video-dir "$STORE" \
   --cuda-device "${CUDA_DEVICE:-0}" \
   --max-turns 100 --planner-timeout-s 5000 --max-episode-steps 10000 \
   --output-dir "$OUT" "${ENDPOINTS[@]}" "$@"

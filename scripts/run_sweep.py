@@ -3,7 +3,6 @@
 
     python scripts/run_sweep.py --suites all --tasks 0-9 --seeds 1-3 --gpu 0 --parallel 2
     python scripts/run_sweep.py --suites libero_10_swap --tasks 4 --seeds 1 --dry-run
-    python scripts/run_sweep.py --suites all --seeds 1 --no-video        # text-memory baseline
 
 One row per attempt is appended to <out>/results.csv and the sweep resumes from it: a cell with a
 valid row is skipped. A cell is solved when the run's state manifest (states.json) reports
@@ -101,11 +100,10 @@ def command(cell: Cell, args: argparse.Namespace, out_dir: Path) -> list[str]:
         "--max-episode-steps", str(args.max_episode_steps),
         "--cuda-device", str(args.gpu), "--output-dir", str(out_dir),
     ]
-    if not args.no_video:
-        cmd += ["--task-video-dir", str(STORE), "--task-video-mode", "both"]
-        if cell.suite.endswith("_task"):
-            # goal-rewriting suites: the demonstration was recorded for the original instruction
-            cmd += ["--task-video-cross-task"]
+    cmd += ["--task-video-dir", str(STORE)]
+    if cell.suite.endswith("_task"):
+        # goal-rewriting suites: the demonstration was recorded for the original instruction
+        cmd += ["--task-video-cross-task"]
     if args.vla_endpoint:
         cmd += ["--vla-endpoint", args.vla_endpoint]
     if args.sam3_endpoint:
@@ -230,14 +228,9 @@ def main() -> None:
     p.add_argument("--retry-backoff-s", type=int, default=180)
     p.add_argument("--vla-endpoint", default=os.environ.get("RPENT_VLA_ENDPOINT", ""))
     p.add_argument("--sam3-endpoint", default=os.environ.get("RPENT_SAM3_ENDPOINT", ""))
-    p.add_argument("--no-video", action="store_true", help="text-memory baseline: no video store, no video prompt")
-    p.add_argument("--allow-prompt-drift", action="store_true")
     p.add_argument("--dry-run", action="store_true")
     args = p.parse_args()
 
-    if not args.no_video and not args.allow_prompt_drift:
-        if subprocess.call([sys.executable, str(HERE / "check_final_prompts.py"), "libero", "--quiet"]) != 0:
-            raise SystemExit("TASK_VIDEO_BOTH differs from prompts/libero_task_video_both.sha256; restore it or pass --allow-prompt-drift")
     suites = list(SUITES) if args.suites == "all" else [s.strip() for s in args.suites.split(",") if s.strip()]
     cells = [Cell(s, t, sd) for s in suites for sd in parse_ids(args.seeds) for t in parse_ids(args.tasks)]
     out = Path(args.out)

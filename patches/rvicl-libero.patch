@@ -1,49 +1,18 @@
 diff --git a/robots/libero/prompt_bundle.py b/robots/libero/prompt_bundle.py
-index d1fce293..0bb4f92b 100644
+index d1fce293..898a07b1 100644
 --- a/robots/libero/prompt_bundle.py
 +++ b/robots/libero/prompt_bundle.py
-@@ -30,9 +30,29 @@ def system_prompt(variables: Mapping[str, object] | None = None) -> PromptNode:
+@@ -30,7 +30,7 @@ def system_prompt(variables: Mapping[str, object] | None = None) -> PromptNode:
      if (variables or {}).get("mode", "eval") == "explore":
          return explore_parts.system_prompt()
      if (variables or {}).get("memory_profile", "hf") == "local":
 -        return local_eval_parts.system_prompt()
 +        return local_eval_parts.system_prompt(variables)
-+    video = bool((variables or {}).get("task_video"))
-+    workflow = (
-+        (system_parts.STEP_WATCH_TASK_VIDEO, *system_parts.WORKFLOW_STEPS)
-+        if video
-+        else system_parts.WORKFLOW_STEPS
-+    )
      return {
          "ROLE AND EVALUATION": system_parts.ROLE_AND_EVALUATION,
-+        **(
-+            {
-+                "TASK VIDEO MEMORY — watch the demonstration of THIS task": (
-+                    system_parts.TASK_VIDEO
-+                    + (
-+                        "\n\n" + system_parts.TASK_VIDEO_CROSS_TASK
-+                        if (variables or {}).get("task_video_cross_task")
-+                        else ""
-+                    )
-+                )
-+            }
-+            if video
-+            else {}
-+        ),
          "PROVEN LEVERS & LESSONS — libero_10_task seed-0 sweep solved 9/10 (READ THIS)": (
-             system_parts.PROVEN_LEVERS
-         ),
-@@ -45,7 +65,7 @@ def system_prompt(variables: Mapping[str, object] | None = None) -> PromptNode:
-         "FIRST-STEP ALGORITHM — agentview = IDENTITY, wrist = GEOMETRY": (
-             system_parts.PERCEPTION_ALGORITHM
-         ),
--        "WORKFLOW": Numbered(system_parts.WORKFLOW_STEPS),
-+        "WORKFLOW": Numbered(workflow),
-         "KEY HYPERPARAMETERS": system_parts.KEY_HYPERPARAMETERS,
-         "OUTPUT DISCIPLINE": system_parts.OUTPUT_DISCIPLINE,
-     }
 diff --git a/robots/libero/prompts/local_eval.py b/robots/libero/prompts/local_eval.py
-index 5804c7b4..064436c7 100644
+index 5804c7b4..6d5ead17 100644
 --- a/robots/libero/prompts/local_eval.py
 +++ b/robots/libero/prompts/local_eval.py
 @@ -16,6 +16,8 @@
@@ -55,27 +24,7 @@ index 5804c7b4..064436c7 100644
  from robots.libero.prompts import system as base
  from rpent.prompt.utils import Numbered, PromptNode
  
-@@ -46,6 +48,19 @@ relevant global leaves through `MEMORY.md`. Recipes are technique references,
- not coordinates: re-localize every entity in the current image. Never read
- `_internal/` during evaluation."""
- 
-+MEMORY_PROFILE_EMPTY = """There is NO text memory for this evaluation: the corpus is empty, by design.
-+Do not go looking for suite strategies, task audits or recipes — none exist, and time spent
-+searching for them is wasted. Your priors are (a) the demonstration video in the video memory
-+layer, and (b) the guides listed below, which describe the tools and the calibration, not this
-+task. Everything else you must derive yourself from the current scene: pick the parameters
-+(step sizes, chunk budgets, grasp offsets) from what you observe, verify after every primitive,
-+and adjust. State in your audit that you worked without text memory."""
-+
-+
-+STEP_READ_EMPTY_MEMORY = """THERE IS NO TEXT MEMORY. Skip every memory read: `{{memory_dir}}` is empty.
-+Go straight to the task video and the guides, then inspect the initial state."""
-+
-+
- STEP_READ_LOCAL_MEMORY = """READ EACH AVAILABLE LOCAL MEMORY LAYER FIRST:
- - task audit: `{{memory_dir}}/task_only/{{reference_tag}}.json`
- - task recipe: `{{memory_dir}}/task_only/{{reference_tag}}_recipe.jsonl`
-@@ -69,18 +84,91 @@ WORKFLOW_STEPS = (
+@@ -69,10 +71,26 @@ WORKFLOW_STEPS = (
  )
  
  
@@ -86,82 +35,24 @@ index 5804c7b4..064436c7 100644
 +    # Goal-rewritten suites: the demonstration shows the ORIGINAL task, and the planner must
 +    # be told so in the prompt itself, not only inside the tool's payload.
 +    cross_task = video and bool((variables or {}).get("task_video_cross_task"))
-+    # "map" replaces the preloaded keyframes with a text map plus on-demand clips.
-+    _mode = str((variables or {}).get("task_video_mode") or "sheets")
-+    video_map = video and _mode == "map"
-+    # "both": the keyframe sheets AND the map with on-demand clips.
-+    video_both = video and _mode == "both"
-+    # "loop": same three views as "both", control loop instead of behavioural rules.
-+    video_loop = video and _mode == "loop"
-+    # "full" (ablation): the complete recording instead of keyframes; plain description, no rules.
-+    video_full = video and _mode == "full"
-+    # "sheets_min" / "full_min" (ablation): images only, one-paragraph description, no watch step.
-+    video_min = video and _mode in ("sheets_min", "full_min")
-+    empty = bool((variables or {}).get("memory_corpus_empty"))
-+    # Ablation arm: the behavioural rules of the video prompt, no demonstration at all.
-+    rules_only = bool((variables or {}).get("task_rules")) and not video
-+    base_steps = (
-+        (STEP_READ_EMPTY_MEMORY, *WORKFLOW_STEPS[1:]) if empty else WORKFLOW_STEPS
-+    )
-+    watch = (
-+        base.STEP_LOOP
-+        if video_loop
-+        else (
-+            base.STEP_WATCH_AND_MAP
-+            if video_both
-+            else (base.STEP_READ_TASK_MAP if video_map else base.STEP_WATCH_TASK_VIDEO)
-+        )
-+    )
-+    steps = (watch, *base_steps) if (video and not video_min) else base_steps
++    steps = (base.STEP_WATCH_AND_MAP, *WORKFLOW_STEPS) if video else WORKFLOW_STEPS
      return {
          "ROLE AND EVALUATION": base.ROLE_AND_EVALUATION,
--        "MEMORY PROFILE — LOCAL SUITE + TASK + GLOBAL": MEMORY_PROFILE,
 +        **(
 +            {
 +                (
 +                    "TASK VIDEO MEMORY — a demonstration of the ORIGINAL task (yours is rewritten)"
 +                    if cross_task
-+                    else (
-+                        "TASK VIDEO MEMORY — read the map of THIS task's demonstration"
-+                        if video_map
-+                        else (
-+                            "TASK VIDEO MEMORY — watch THIS task's demonstration and read its map"
-+                            if (video_both or video_loop)
-+                            else "TASK VIDEO MEMORY — watch the demonstration of THIS task"
-+                        )
-+                    )
-+                ): (
-+                    base.TASK_VIDEO_LOOP
-+                    if video_loop
-+                    else (
-+                        base.TASK_VIDEO_BOTH
-+                        if video_both
-+                        else (base.TASK_VIDEO_MAP if video_map else (base.TASK_VIDEO_FULL if video_full else base.TASK_VIDEO))
-+                    )
-+                )
-+                + ("\n\n" + base.TASK_VIDEO_CROSS_TASK if cross_task else "")
++                    else "TASK VIDEO MEMORY — watch THIS task's demonstration and read its map"
++                ): base.TASK_VIDEO_BOTH + ("\n\n" + base.TASK_VIDEO_CROSS_TASK if cross_task else "")
 +            }
-+            if (video and not video_min)
++            if video
 +            else {}
 +        ),
-+        **(
-+            {"TASK DEMONSTRATION": (base.TASK_VIDEO_MIN_FULL if _mode == "full_min" else base.TASK_VIDEO_MIN_KEYFRAMES)}
-+            if video_min
-+            else {}
-+        ),
-+        **(
-+            {"EXECUTION RULES — recovery, placement, enclosures, posture under load": base.TASK_RULES_NOVIDEO}
-+            if rules_only
-+            else {}
-+        ),
-+        (
-+            "MEMORY PROFILE — NO TEXT MEMORY IN THIS RUN"
-+            if empty
-+            else "MEMORY PROFILE — LOCAL SUITE + TASK + GLOBAL"
-+        ): (MEMORY_PROFILE_EMPTY if empty else MEMORY_PROFILE),
+         "MEMORY PROFILE — LOCAL SUITE + TASK + GLOBAL": MEMORY_PROFILE,
          "PROVEN LEVERS": base.PROVEN_LEVERS,
          "RUNTIME": base.RUNTIME,
-         "YOUR GOAL": base.GOAL,
+@@ -80,7 +98,7 @@ def system_prompt() -> PromptNode:
          "RULES (NON-NEGOTIABLE)": base.RULES,
          "LOCALIZATION": base.LOCALIZATION,
          "FIRST-STEP ALGORITHM": base.PERCEPTION_ALGORITHM,
@@ -171,47 +62,13 @@ index 5804c7b4..064436c7 100644
          "OUTPUT DISCIPLINE": base.OUTPUT_DISCIPLINE,
      }
 diff --git a/robots/libero/prompts/system.py b/robots/libero/prompts/system.py
-index f22f79b7..4f00c898 100644
+index f22f79b7..cecba48e 100644
 --- a/robots/libero/prompts/system.py
 +++ b/robots/libero/prompts/system.py
-@@ -513,3 +513,419 @@ OUTPUT_DISCIPLINE = """- Brief reasoning before each tool call (1-2 sentences):
+@@ -513,3 +513,138 @@ OUTPUT_DISCIPLINE = """- Brief reasoning before each tool call (1-2 sentences):
    returned the new state.
  - Save the audit BEFORE calling `finish`.
  - Stop immediately after writing the audit and calling `finish`. Do not chat further."""
-+
-+
-+TASK_VIDEO = """A demonstration video of THIS EXACT task is in the memory layer. Its provenance,
-+as recorded in the video memory layer, is: {{task_video_source}}
-+
-+Watch it before you plan: call `view_task_video({})`, and `view_task_video({"part": N})` for
-+the later keyframes (this cell has {{task_video_parts}} part(s)).
-+
-+Each keyframe shows the agentview and the wrist camera side by side, captioned with the
-+demonstration step, the gripper state, the end-effector xyz and the grasp/release events.
-+The demonstration was teleoperated by a human and it SUCCEEDED, so it is ground truth for
-+WHAT the task means.
-+
-+TAKE FROM THE VIDEO:
-+- the sub-goals and their ORDER, and how many there are;
-+- WHICH object ends up at WHICH destination — this settles look-alike targets and the
-+  left/right wording far more reliably than reasoning about the frame convention;
-+- the grasp point on each object (rim, body, handle) and the approach direction;
-+- when the gripper closes and when it opens, i.e. what has to be true before release;
-+- the carry height above the table and whether the object is lowered until it rests;
-+- for two-object tasks, the order and the path taken between the two placements.
-+
-+DO NOT TAKE FROM THE VIDEO:
-+- any coordinate, pixel or absolute pose. The demonstration layout DIFFERS from your
-+  scene: the objects, the destinations and the robot start pose are elsewhere. Re-localize
-+  everything in your own images.
-+- its motion granularity. It is a dense teleoperated trajectory; you act with chunked
-+  primitives and Pi0 does the contact phase, so reproduce the STRATEGY, not the path.
-+
-+HOW IT COMBINES WITH THE OTHER MEMORY LAYERS: the video is the authority on WHAT success
-+looks like; the suite and global memories are the authority on HOW to get there with these
-+primitives (parameter ranges, Pi0 behaviour, failure modes). If they conflict about the
-+target or the order, follow the video; if they conflict about a parameter or a primitive's
-+behaviour, follow the memory."""
 +
 +
 +TASK_VIDEO_CROSS_TASK = """⚠ THIS SUITE REWRITES GOALS. The demonstration was recorded for the ORIGINAL
@@ -223,71 +80,7 @@ index f22f79b7..4f00c898 100644
 +demonstrated goal instead of your own is the single worst failure mode here."""
 +
 +
-+TASK_VIDEO_MAP = """A demonstration of THIS EXACT task is in the memory layer, as a MAP plus clips
-+you pull on demand. Its provenance, as recorded in the video memory layer, is:
-+{{task_video_source}}
-+
-+Read the map first: call `view_task_map({})`. It returns NO images. It returns the
-+demonstration's structure in text: how long it is, its PHASES (the intervals between gripper
-+transitions, each with its duration, its gripper state, and how far the end-effector rose,
-+fell and travelled) and its MOMENTS (the instants the gripper closes or opens). The
-+demonstration was teleoperated by a human and it SUCCEEDED, so it is ground truth for WHAT
-+the task means, and the map alone already tells you how many sub-goals there are and in what
-+order they happened.
-+
-+Then pull clips where they pay: `view_demo_clip({"moment": "grasp 1"})` returns the ~2 s
-+around that gripper closure as ONE densely sampled strip — about 20 consecutive frames of
-+what the human's own cameras recorded, agentview above wrist, each captioned with its step
-+and gripper state. `view_demo_clip({"phase": 3})` returns a whole interval the same way.
-+This is the part the keyframes of a sparse summary cannot give you: not where things are,
-+but HOW the hand did it — the approach direction, the wrist orientation, where on the object
-+the fingers close, how far it descends before closing, what moves first afterwards, and
-+whether the object is set down before the gripper opens.
-+
-+PULL A CLIP AT THE POINT OF ACTION, not all of them up front: before you close the gripper on
-+an object, watch that grasp; before you release, watch that release; when a stretch of motion
-+is unclear, watch that phase. The map has no pictures, so the grasp moments are also where
-+you SEE which object each sub-goal acts on — pull those before you commit to an order. Each
-+clip is small and you can afford several, but every one you pull stays in context for the
-+rest of the episode, so pull the one you are about to use rather than collecting them.
-+
-+TAKE FROM THE MAP AND CLIPS:
-+- the sub-goals and their ORDER, and how many there are;
-+- WHICH object ends up at WHICH destination — this settles look-alike targets and the
-+  left/right wording far more reliably than reasoning about the frame convention;
-+- the grasp point on each object (rim, body, handle) and the approach direction;
-+- when the gripper closes and when it opens, i.e. what has to be true before release;
-+- the carry height above the table and whether the object is lowered until it rests;
-+- for two-object tasks, the order and the path taken between the two placements.
-+
-+DO NOT TAKE FROM THE MAP OR THE CLIPS:
-+- any coordinate, pixel or absolute pose. The demonstration layout DIFFERS from your
-+  scene: the objects, the destinations and the robot start pose are elsewhere. Re-localize
-+  everything in your own images. The clips are recorded at 128 px in the demonstration's own
-+  layout; they are evidence about motion, never about position.
-+- its motion granularity. It is a dense teleoperated trajectory; you act with chunked
-+  primitives and Pi0 does the contact phase, so reproduce the STRATEGY, not the path.
-+
-+HOW IT COMBINES WITH THE OTHER MEMORY LAYERS: the video is the authority on WHAT success
-+looks like; the suite and global memories are the authority on HOW to get there with these
-+primitives (parameter ranges, Pi0 behaviour, failure modes). If they conflict about the
-+target or the order, follow the video; if they conflict about a parameter or a primitive's
-+behaviour, follow the memory."""
-+
-+
-+STEP_READ_TASK_MAP = """READ THE TASK MAP FIRST: call `view_task_map` before the perception pass, and
-+pull `view_demo_clip` for the grasp moments. Then write, one line each: the sub-goals in
-+order, the target of each, the grasp point per object, and the condition under which the
-+gripper opens. Plan against that list; localize in YOUR scene. Pull the clip for a grasp or
-+a release again at the moment you are about to perform it."""
-+
-+
-+#: LIBERO final (decided 2026-09-28): the SIX-rule text (rules 0 1 2 4 5 6, no rule 3 re-grasp/re-seat);
-+#: the seven-rule text is kept in video_icl/final/libero_task_video_both_7rules.txt.
-+#: "both" mode: the keyframe sheets AND the map with on-demand clips. The head below is the
-+#: only thing that differs from the other two conditions; everything about what to take from
-+#: the demonstration and what not to is spliced in from TASK_VIDEO itself, so the three
-+#: conditions cannot drift apart.
++#: The TASK VIDEO section: keyframe sheets, the map, and on-demand clips.
 +TASK_VIDEO_BOTH = """A demonstration of THIS EXACT task is in the memory layer, in two forms that
 +answer different questions. Its provenance, as recorded in the video memory layer, is:
 +{{task_video_source}}
@@ -383,105 +176,27 @@ index f22f79b7..4f00c898 100644
 +When a descent stalls against a reach limit while you are holding something, prefer translating
 +the base pose over re-orienting the wrist. Re-orienting under load is what drops things.
 +
-+""" + TASK_VIDEO[TASK_VIDEO.index("TAKE FROM THE VIDEO:"):]
++TAKE FROM THE VIDEO:
++- the sub-goals and their ORDER, and how many there are;
++- WHICH object ends up at WHICH destination — this settles look-alike targets and the
++  left/right wording far more reliably than reasoning about the frame convention;
++- the grasp point on each object (rim, body, handle) and the approach direction;
++- when the gripper closes and when it opens, i.e. what has to be true before release;
++- the carry height above the table and whether the object is lowered until it rests;
++- for two-object tasks, the order and the path taken between the two placements.
 +
++DO NOT TAKE FROM THE VIDEO:
++- any coordinate, pixel or absolute pose. The demonstration layout DIFFERS from your
++  scene: the objects, the destinations and the robot start pose are elsewhere. Re-localize
++  everything in your own images.
++- its motion granularity. It is a dense teleoperated trajectory; you act with chunked
++  primitives and Pi0 does the contact phase, so reproduce the STRATEGY, not the path.
 +
-+#: "loop" mode: the same three views as "both" (the description of KEYFRAMES / MAP / CLIPS is
-+#: sliced from TASK_VIDEO_BOTH verbatim, so the two modes cannot drift on what the
-+#: demonstration IS), but the seven behavioural rules are replaced by one control loop, one
-+#: embodiment table and three technique notes. The loop is what the seven rules were each
-+#: approximating from a different side: an explicit per-sub-goal budget, a progress test on
-+#: the task object rather than on the arm, and one escalation ladder that says when to
-+#: continue, when to switch primitive, when to rewatch and when to move on.
-+TASK_VIDEO_LOOP = TASK_VIDEO_BOTH[: TASK_VIDEO_BOTH.index("WHEN SOMETHING STALLS")] + """\
-+THERE IS NO EARLY EXIT. The base instructions say to STOP and write the audit the instant you
-+would want to reset. Read that as it was meant - never call `reset` - and not as it can be
-+misread - never stop early. In this loop nothing stops early: a grasp that misses, a can
-+knocked over, a pot on its side, a skill that spent its budget - each of these is the
-+beginning of a recovery, never the end of the episode. "Recording the honest outcome" while
-+the turn budget remains is not honesty; it is the cell thrown away. The audit is written
-+once, when the task is done or the budget is spent, and at no other time.
-+
-+THE LOOP. Work the map's sub-goals in order. For each one:
-+
-+  1. WATCH its phase or moment ONCE, BEFORE the first action on that sub-goal. This is not
-+     optional and the keyframe pages do not count: they show a pose, the clip shows the motion.
-+     Take from it the approach direction, the grasp point, the
-+     carry height and the release condition. A clip you have already watched has nothing more
-+     to tell you; do not pull it again unless step 4 sends you back, and never a third time.
-+  2. ACT with the primitive the embodiment table names first, for the number of attempts the
-+     table gives, back to back. Do not put anything between two attempts of the same primitive
-+     - not a clip, not a measurement, not a different primitive.
-+  3. TEST PROGRESS ON THE TASK OBJECT, not on the arm. The sub-goal names an object and a
-+     destination, or a fixture and a state (the map's phase label says which). Progress is
-+     that object being lifted, moved or seated, that fixture being opened or closed. The arm
-+     getting closer, the wrist turning, the gripper repositioning - none of that is progress.
-+     If the task object has changed, continue or advance to the next sub-goal. If you cannot
-+     SEE that it changed - a skill that "reached the area" or "did not report termination"
-+     has not shown you a changed object - it has not changed, and you do not advance.
-+  4. IF NOT, ESCALATE, one rung at a time. Never skip a rung in EITHER direction: you do not
-+     go back up, and you do not reach the last rung until every rung above it has been tried
-+     and has shown no change in the task object:
-+       a. the next primitive in the table, for its own number of attempts;
-+       b. rewatch the clip once (this is the only permitted second viewing) and take a
-+          different approach direction or grasp point from it, then rung a again;
-+       c. PARK this sub-goal: one line in your notes saying where the object is and which
-+          rungs were tried, then move to the next sub-goal. Nothing has "failed" - a parked
-+          sub-goal is one you will come back to. When every sub-goal has been visited, RETURN
-+          to the parked ones in order, each with whatever allowance it has left, starting again
-+          at rung a. The episode ends when the task is done or the turn budget is spent; there
-+          is no third way out.
-+  5. BUDGET. You have 100 turns for N sub-goals: each one is allowed 100/N turns, and none is
-+     allowed more than twice that. Track it. Spending the whole budget on one sub-goal is one
-+     failure mode this loop exists to prevent. The other is the opposite: a sub-goal is not
-+     failed until it has been given at least HALF its allowance across rungs a and b, and the
-+     episode is not over while any sub-goal still has allowance and an untried rung. Ending at
-+     turn 8 of 100 with rungs untried is not economy, it is the cell thrown away.
-+
-+THE EMBODIMENT TABLE. What each primitive's return means and how many attempts it gets:
-+  `pi0_pick`     returns a TERMINAL result: a false is a real miss. 3 attempts, climbing the
-+                 Pi0 prompt ladder on each. Then rung a is: a different approach direction or
-+                 `rotate_pitch` to a new pre-pose, and 3 more.
-+  `move_to`      terminal. 1 attempt. If it stops short of the target, rung a is `move_pose`
-+                 co-varying pitch once; if that also stops short, translate the pre-pose
-+                 rather than re-orienting further - re-orienting under load drops things.
-+  `set_gripper`, `release`   terminal, 1 attempt each.
-+
-+WHAT THE DEMONSTRATION IS FOR, AND NOT FOR.
-+  WHAT   (the order of sub-goals, which object, which destination)  - the demonstration is
-+         the authority; the map states it and the keyframes show it.
-+  HOW    (approach direction, grasp point, carry height, when to release)  - the clip shows it;
-+         consult it at step 1 and, once, at rung b.
-+  WHICH  (which primitive, which prompt rung, whether to re-pose)  - the demonstration is
-+         SILENT. A human hand has no primitives. Do not go to the clip for this; the
-+         embodiment table answers it.
-+
-+CONTEXT IS NOT FREE. Every clip and keyframe page you pull stays in your context for the rest
-+of the episode and makes every later turn slower to reason over. That is why each clip is
-+watched once, and why the second viewing is a deliberate rung and not a reflex.
-+
-+THREE TECHNIQUE NOTES, each from a diagnosed failure:
-+  - Before releasing onto an OPEN SURFACE (a plate, a stove top, a table region), measure the
-+    held object's base and the target's centre from the SAME wrist frame with
-+    `back_project(camera="wrist")`, correct the xy while still holding, then descend until the
-+    descent stops, then open. A few centimetres decide these placements and the wrist is the
-+    only camera that resolves them.
-+  - Before releasing into an ENCLOSURE (a basket, a drawer, a cavity), the object must be
-+    RESTING on the inner floor, not held above it: lower until the descent height repeats
-+    across attempts, which is contact. Released while suspended, it rolls back out to where
-+    the approach is blocked.
-+  - Under load, translate; do not re-orient. Pitch and yaw changes while holding are what
-+    drop objects.
-+
-+""" + TASK_VIDEO[TASK_VIDEO.index("TAKE FROM THE VIDEO:"):]
-+
-+
-+STEP_LOOP = """WATCH THE TASK VIDEO AND READ ITS MAP FIRST: call `view_task_video` (all parts)
-+and `view_task_map` before the perception pass. Then write the sub-goal list from the map, one
-+line each: the object and destination (or fixture and state), the grasp point, the release
-+condition, and its turn allowance (100 divided by the number of sub-goals). Then run THE LOOP
-+on the first sub-goal: pull its clip once, act with the table's first primitive for its
-+attempts, test progress on the task object, escalate one rung at a time."""
++HOW IT COMBINES WITH THE OTHER MEMORY LAYERS: the video is the authority on WHAT success
++looks like; the suite and global memories are the authority on HOW to get there with these
++primitives (parameter ranges, Pi0 behaviour, failure modes). If they conflict about the
++target or the order, follow the video; if they conflict about a parameter or a primitive's
++behaviour, follow the memory."""
 +
 +
 +STEP_WATCH_AND_MAP = """WATCH THE TASK VIDEO AND READ ITS MAP FIRST: call `view_task_video` (all parts)
@@ -489,113 +204,8 @@ index f22f79b7..4f00c898 100644
 +order, the target of each, the grasp point per object, and the condition under which the
 +gripper opens. Plan against that list; localize in YOUR scene. Pull `view_demo_clip` for a
 +grasp, a release or a phase at the moment you are about to perform it."""
-+
-+
-+STEP_WATCH_TASK_VIDEO = """WATCH THE TASK VIDEO FIRST: call `view_task_video` (all parts) before the
-+perception pass. Then write, one line each: the sub-goals in order, the target of each, the
-+grasp point per object, and the condition under which the gripper opens. Plan against that
-+list; localize in YOUR scene."""
-+
-+
-+#: Ablation arm "rules only": the behavioural rules of TASK_VIDEO_BOTH (rules 1-6) with every
-+#: reference to the demonstration removed; no video tools are registered with it.
-+TASK_RULES_NOVIDEO = """These rules come from solved and failed episodes of this task family. They say what decides
-+an episode once the plan is right: when to keep going, how to place, how to enter an
-+enclosure, and how to move under load. Plan from the text memory and your own cameras, and
-+apply these rules during execution.
-+
-+DO NOT CONCLUDE THE EPISODE IS LOST. Seeing that the scene no longer matches your plan is a
-+cue to CORRECT, never a reason to conclude the episode is over: it tells you WHICH sub-goal to
-+re-attempt, not that the attempt has failed. Recovery inside this one episode is unbounded and
-+costs nothing but turns: re-pre-position, re-`pi0_pick`, walk the Pi0 prompt ladder,
-+`rotate_pitch`/`move_pose`, try a different grasp point, approach direction or descent depth.
-+An honest `terminated:false` audit is the right ending ONLY after you have exhausted the turn
-+budget, or tried and failed every distinct recovery you can name. "This is not going to plan"
-+is the beginning of a recovery, not the end of the episode.
-+
-+PLACE IT RIGHT THE FIRST TIME - MEASURE IN THE WRIST FRAME BEFORE YOU OPEN. A placement is
-+judged on where the object ENDS UP relative to its target, so the last moment you can cheaply
-+fix it is while you are still holding it. This applies when the target is an OPEN SURFACE the
-+object comes to rest on - a plate, a stove top, a table region - where the final position is
-+what is judged and nothing stops you lowering straight down. Before such a release, with the
-+object still gripped and held over its target:
-+  1. call `view_env_state` and work from the WRIST image, not agentview. At release range the
-+     wrist sees the held object's base and the target's surface in the same frame; agentview
-+     does not resolve the few centimetres that decide whether the placement counts.
-+  2. `back_project` several pixels on the held object's BASE and several on the TARGET's centre,
-+     both with `camera="wrist"`, both from THAT SAME frame, and median each. Comparing a base
-+     measured now against a target centre measured earlier, or from the other camera, is the
-+     error that sinks placements.
-+  3. correct the xy difference while still holding, THEN descend and release.
-+Targets are not always fixed: a plate, a lid or a light container can slide as the object seats
-+on it, so re-measure the target after contact rather than trusting where it was.
-+Do NOT release and plan to nudge it afterwards. Once an object is resting on its target,
-+re-grasping it is a much harder contact problem than the original pick: the approach is partly
-+blocked by the target, and Pi0 will repeatedly make rim contact without closing. Budget your
-+care for BEFORE the release, where it is cheap.
-+That said, a placement that has already happened is not always beyond repair, and which case
-+you are in depends on WHERE the object came to rest. On an OPEN SURFACE it is still fully
-+approachable from above, so if the predicate has not fired and your measurement says it is off
-+by a centimetre or two, RE-GRASP IT AND RE-SEAT IT: the grasp may take several attempts and is
-+worth every one of them, because the alternative is ending the episode on a placement you know
-+to be wrong. Inside or beside an ENCLOSURE is the case that is usually hopeless - the walls,
-+the rim or the appliance body block the approach - and there the effort belongs elsewhere.
-+
-+WHEN THE TARGET IS AN ENCLOSURE, NOT A SURFACE. A basket, a drawer, a cabinet, a caddy
-+compartment, a microwave cavity - anything the object has to go INSIDE - inverts the advice
-+above. You are not judged on hitting a centre there; you are judged on the object ending up in
-+the enclosure at all. What loses these episodes is LOSING THE OBJECT ON THE WAY IN. So take the
-+first grasp that actually lifts the object, even an imperfect one; aim for the middle of the
-+opening; accept a rough alignment and go in. Every extra rotation, pitch change or re-alignment
-+you perform while holding the object is another chance to drop it, and an object dropped into
-+or on top of an appliance, or beside a container, is usually unrecoverable because the approach
-+to it is then blocked. Measure enough to clear the rim and the walls, then commit.
-+Relaxing the position requirement does NOT relax the support requirement. Before you open the
-+fingers, the object must be RESTING on the enclosure's inner floor, not merely held above it
-+with its base past the rim: keep lowering until the descent stops at a height that repeats
-+across attempts, which is contact, and confirm the base is ON the floor rather than over it.
-+An object released while still suspended near the mouth tips or rolls back out, and it then
-+sits where the approach is blocked - the one outcome this whole section is trying to avoid.
-+
-+When a descent stalls against a reach limit while you are holding something, prefer translating
-+the base pose over re-orienting the wrist. Re-orienting under load is what drops things.
-+"""
-+
-+
-+#: "full" mode (ablation, 2026-09-28): the COMPLETE recorded demonstration instead of keyframes,
-+#: under the same plain description as TASK_VIDEO and without any behavioural rules. Only the
-+#: paragraph saying what the video looks like differs from TASK_VIDEO (the keyframe arm); the
-+#: TAKE / DO NOT TAKE lists and the memory-layer paragraph are spliced in from it verbatim.
-+TASK_VIDEO_FULL = """A demonstration video of THIS EXACT task is in the memory layer. Its provenance,
-+as recorded in the video memory layer, is: {{task_video_source}}
-+
-+Watch it before you plan: call `view_task_video({})`, and `view_task_video({"part": N})` for
-+the later parts (this cell has {{task_video_parts}} part(s)).
-+
-+This is the COMPLETE recording, not a selection: every frame the demonstration's cameras
-+recorded, in time order, at the control rate. Each image holds one second of consecutive
-+frames, left to right and top to bottom; each frame shows the agentview camera above the wrist
-+camera and is stamped with its demonstration step. The demonstration was teleoperated by a
-+human and it SUCCEEDED, so it is ground truth for WHAT the task means.
-+
-+""" + TASK_VIDEO[TASK_VIDEO.index("TAKE FROM THE VIDEO:"):]
-+
-+
-+#: Minimal-description ablation (2026-09-28): the demonstration images with no checklist, no
-+#: watch-and-plan workflow step and no text in the tool result or on the images. The two arms
-+#: differ only in the sentence that says how the images are laid out.
-+TASK_VIDEO_MIN_KEYFRAMES = """A demonstration of this task is available: call `view_task_video({})` to see it, and
-+`view_task_video({"part": N})` for the later parts (this cell has {{task_video_parts}} part(s)).
-+Each image shows keyframes of the demonstration in time order, top to bottom; each keyframe is
-+the agentview camera (left) and the wrist camera (right)."""
-+
-+TASK_VIDEO_MIN_FULL = """A demonstration of this task is available: call `view_task_video({})` to see it, and
-+`view_task_video({"part": N})` for the later parts (this cell has {{task_video_parts}} part(s)).
-+It is the complete video, every frame in time order: each image shows one second of consecutive
-+frames, left to right and top to bottom; each frame is the agentview camera (top) and the wrist
-+camera (bottom)."""
 diff --git a/robots/libero/robot_spec.py b/robots/libero/robot_spec.py
-index 167fdc6b..1708b916 100644
+index 167fdc6b..eed0d460 100644
 --- a/robots/libero/robot_spec.py
 +++ b/robots/libero/robot_spec.py
 @@ -17,12 +17,14 @@
@@ -625,52 +235,25 @@ index 167fdc6b..1708b916 100644
      memory = MemoryManager(
          root=config.prompt_vars.get("memory_dir") or get_memory_dir("libero"),
          memory_access="inbox_write" if explore else "read_only",
-@@ -167,6 +174,9 @@ def get_toolkit(
+@@ -167,6 +174,8 @@ def get_toolkit(
          mode=mode,
          attempts_per_session=attempts_per_session,
          state_output_dir=state_output_dir,
 +        task_video=video,
 +        task_video_cross_task=bool(config.prompt_vars.get("task_video_cross_task")),
-+        task_video_mode=str(config.prompt_vars.get("task_video_mode") or "sheets"),
      )
  
  
-@@ -180,6 +190,49 @@ def _add_cli_args(parser: argparse.ArgumentParser, use_dashboard: bool) -> None:
+@@ -180,6 +189,23 @@ def _add_cli_args(parser: argparse.ArgumentParser, use_dashboard: bool) -> None:
      """
      required = not use_dashboard
      parser.add_argument("--max-episode-steps", type=int, default=10000)
-+    parser.add_argument(
-+        "--task-rules",
-+        action="store_true",
-+        default=os.environ.get("RPENT_TASK_RULES") == "1",
-+        help=(
-+            "Ablation: add the execution rules of the video prompt (TASK_RULES_NOVIDEO) "
-+            "without any demonstration. Ignored when a task video is given."
-+        ),
-+    )
 +    parser.add_argument(
 +        "--task-video-cross-task",
 +        action="store_true",
 +        help=(
 +            "Goal-rewriting suites (*_task): tell the planner that the demonstration was "
 +            "recorded for the ORIGINAL instruction and that it must take technique only."
-+        ),
-+    )
-+    parser.add_argument(
-+        "--task-video-mode",
-+        default=os.environ.get("RPENT_TASK_VIDEO_MODE", "sheets"),
-+        choices=["sheets", "map", "both", "loop", "full", "sheets_min", "full_min"],
-+        help=(
-+            "How the demonstration reaches the planner. 'sheets' (default) preloads the "
-+            "keyframe contact sheets via view_task_video. 'map' preloads no images: "
-+            "view_task_map returns the demonstration's phases and moments as text and "
-+            "view_demo_clip serves a densely sampled clip of any one of them on demand "
-+            "(requires video_icl/build_clips.py to have been run over the store). "
-+            "'full' (ablation) serves the COMPLETE recording instead of keyframes, from a store "
-+            "built by video_icl/build_full_videos.py, with the same plain description as 'sheets'. "
-+            "'sheets_min' / 'full_min' (ablation) serve text-free keyframes / the complete "
-+            "recording from video_icl/build_plain_videos.py stores, under a one-paragraph "
-+            "description and without the watch-and-plan workflow step."
 +        ),
 +    )
 +    parser.add_argument(
@@ -685,34 +268,21 @@ index 167fdc6b..1708b916 100644
      parser.add_argument(
          "--libero-type",
          default=None,
-@@ -312,7 +365,26 @@ def _parse_config(args: argparse.Namespace) -> RunConfig:
+@@ -312,7 +338,13 @@ def _parse_config(args: argparse.Namespace) -> RunConfig:
                  f"local memory corpus not found at {memory_dir}; "
                  "run exploration first or use --memory-profile hf"
              )
 +    video = task_video.resolve(getattr(args, "task_video_dir", None), args.suite, args.task)
-+    # An empty corpus must be described as empty: telling the planner to read three layers
-+    # that do not exist costs turns and implies a recipe exists somewhere.
-+    corpus_empty = False
-+    # Opt-in: enabling it mid-experiment would change the prompt for later cells only.
-+    if memory_dir is not None and os.environ.get("RPENT_ANNOUNCE_EMPTY_MEMORY") == "1":
-+        corpus_empty = not any(
-+            path.is_file()
-+            for scope in ("global", "suite", "task_only")
-+            for path in (Path(memory_dir) / scope).glob("*")
-+        )
      prompt_vars = {
-+        "memory_corpus_empty": bool(corpus_empty and not explore),
 +        "task_video": bool(video),
 +        "task_video_id": video.video_id if video else "",
 +        "task_video_source": video.provenance if video else "",
 +        "task_video_cross_task": bool(video and getattr(args, "task_video_cross_task", False)),
 +        "task_video_parts": video.n_parts if video else 0,
-+        "task_video_mode": str(getattr(args, "task_video_mode", "sheets") or "sheets"),
-+        "task_rules": bool(getattr(args, "task_rules", False)) and not video,
          "suite": args.suite,
          "task": args.task,
          "seed": args.seed,
-@@ -320,6 +392,7 @@ def _parse_config(args: argparse.Namespace) -> RunConfig:
+@@ -320,6 +352,7 @@ def _parse_config(args: argparse.Namespace) -> RunConfig:
          "mode": "explore" if explore else "eval",
          "memory_profile": memory_profile,
          "memory_dir": str(memory_dir),
@@ -721,7 +291,7 @@ index 167fdc6b..1708b916 100644
          # Per-cell inbox: parallel explore runs must not append to a shared file.
          "memory_inbox": str(memory_dir / "_internal" / "inbox" / recipe_tag),
 diff --git a/robots/libero/toolkit.py b/robots/libero/toolkit.py
-index b072896b..d3b79221 100644
+index b072896b..f5df5a68 100644
 --- a/robots/libero/toolkit.py
 +++ b/robots/libero/toolkit.py
 @@ -24,6 +24,8 @@ from functools import partial
@@ -733,43 +303,29 @@ index b072896b..d3b79221 100644
  from robots.libero import tools as libero_tools
  from rpent.dashboard.events import DashboardEventSink
  from rpent.session import EnvState
-@@ -48,6 +50,9 @@ class LiberoToolkit(Toolkit):
+@@ -48,6 +50,8 @@ class LiberoToolkit(Toolkit):
          mode: str = "evaluation",
          attempts_per_session: int = 0,
          state_output_dir: Path | str | None = None,
 +        task_video: "task_video_mod.TaskVideo | None" = None,
 +        task_video_cross_task: bool = False,
-+        task_video_mode: str = "sheets",
      ) -> None:
          if mode not in {"evaluation", "exploration"}:
              raise ValueError(f"unsupported LIBERO toolkit mode: {mode!r}")
-@@ -59,6 +64,21 @@ class LiberoToolkit(Toolkit):
+@@ -59,6 +63,8 @@ class LiberoToolkit(Toolkit):
              memory=memory,
          )
          self._mode = mode
 +        self._task_video = task_video
 +        self._task_video_cross_task = bool(task_video_cross_task)
-+        # "sheets": the keyframe contact sheets. "map": a text map of the demonstration
-+        # plus view_demo_clip, which serves densely sampled clips on demand.
-+        self._task_video_mode = str(task_video_mode or "sheets")
-+        # "loop" mode enforcement, all no-ops unless mode == "loop": the control loop the
-+        # prompt describes is held by the harness rather than by prose. Four prompt versions
-+        # asked the planner to run it and on the cells that mattered it did not; the base
-+        # prompt's SINGLE-ATTEMPT exit ended the episode at turn 3-8 with zero clips pulled.
-+        self._loop = self._task_video_mode == "loop"
-+        self._loop_clip_counts: dict[tuple, int] = {}
-+        self._loop_action_calls = 0
-+        self._loop_grasp_calls = 0
-+        self._loop_finish_refusals = 0
-+        self._loop_calls_at_refusal = -1
          self._solved: bool = False
          self._attempt: int = 1
          # Bound the resettable attempts owned by this planner session.
-@@ -94,6 +114,84 @@ class LiberoToolkit(Toolkit):
+@@ -94,6 +100,30 @@ class LiberoToolkit(Toolkit):
                      continue  # spec without a backing primitive method
                  handler = partial(self._execute_primitive, name, handler)
              self.add_tool(name, spec, handler)
-+        if self._task_video is not None and self._task_video_mode in ("both", "loop"):
++        if self._task_video is not None:
 +            self.add_tool(
 +                task_video_mod.TOOL_SPEC["name"],
 +                task_video_mod.TOOL_SPEC,
@@ -792,153 +348,18 @@ index b072896b..d3b79221 100644
 +                demo_clip_mod.TOOL_SPEC["name"],
 +                demo_clip_mod.TOOL_SPEC,
 +                partial(demo_clip_mod.view_demo_clip, video=self._task_video),
-+            )
-+        elif self._task_video is not None and self._task_video_mode == "map":
-+            self.add_tool(
-+                demo_clip_mod.TOOL_SPEC_MAP["name"],
-+                demo_clip_mod.TOOL_SPEC_MAP,
-+                partial(
-+                    demo_clip_mod.view_task_map,
-+                    video=self._task_video,
-+                    cross_task=self._task_video_cross_task,
-+                ),
-+            )
-+            self.add_tool(
-+                demo_clip_mod.TOOL_SPEC["name"],
-+                demo_clip_mod.TOOL_SPEC,
-+                partial(demo_clip_mod.view_demo_clip, video=self._task_video),
-+            )
-+        elif self._task_video is not None and self._task_video_mode in ("sheets_min", "full_min"):
-+            # Minimal-description ablation: images only, no text in the result or on the images.
-+            want_full = self._task_video_mode == "full_min"
-+            if not self._task_video.index.get("minimal") or self._task_video.is_full != want_full:
-+                raise ValueError(
-+                    f"--task-video-mode {self._task_video_mode} needs a matching plain store "
-+                    "(video_icl/build_plain_videos.py), got " + str(self._task_video.root)
-+                )
-+            self.add_tool(
-+                task_video_mod.TOOL_SPEC_MIN["name"],
-+                task_video_mod.TOOL_SPEC_MIN,
-+                partial(task_video_mod.view_task_video, video=self._task_video, cross_task=False),
-+            )
-+        elif self._task_video is not None and self._task_video_mode == "full":
-+            # Ablation: the complete recording instead of keyframes, same tool name.
-+            if not self._task_video.is_full:
-+                raise ValueError(
-+                    "--task-video-mode full needs a complete-recording store "
-+                    "(video_icl/build_full_videos.py), got " + str(self._task_video.root)
-+                )
-+            self.add_tool(
-+                task_video_mod.TOOL_SPEC_FULL["name"],
-+                task_video_mod.TOOL_SPEC_FULL,
-+                partial(
-+                    task_video_mod.view_task_video,
-+                    video=self._task_video,
-+                    cross_task=self._task_video_cross_task,
-+                ),
-+            )
-+        elif self._task_video is not None:
-+            self.add_tool(
-+                task_video_mod.TOOL_SPEC["name"],
-+                task_video_mod.TOOL_SPEC,
-+                partial(
-+                    task_video_mod.view_task_video,
-+                    video=self._task_video,
-+                    cross_task=self._task_video_cross_task,
-+                ),
 +            )
          if self._mode == "exploration":
              reset_spec = next(
                  spec for spec in libero_tools.TOOLS_SPEC if spec["name"] == "reset"
-@@ -103,8 +201,88 @@ class LiberoToolkit(Toolkit):
+@@ -103,7 +133,6 @@ class LiberoToolkit(Toolkit):
              self.add_tool(
                  "finish", finish_spec, partial(self._guarded_finish, finish_handler)
              )
-+        if self._loop and self._task_video is not None:
-+            self.add_tool(
-+                demo_clip_mod.TOOL_SPEC["name"],
-+                demo_clip_mod.TOOL_SPEC,
-+                partial(
-+                    self._loop_clip,
-+                    partial(demo_clip_mod.view_demo_clip, video=self._task_video),
-+                ),
-+            )
-+            finish_spec, finish_handler = self._tools["finish"]
-+            self.add_tool(
-+                "finish", finish_spec, partial(self._loop_finish, finish_handler)
-+            )
-+            logger.info(
-+                "[loop] harness enforcement active: finish gate (clips>=1, pi0_pick>=6, actions>=20), "
-+                "clip cap (same phase/moment at most twice)"
-+            )
-+
-+    # ---- "loop" mode enforcement ------------------------------------------------
-+    @readonly
-+    def _loop_clip(self, inner: Any, **kwargs: Any) -> dict[str, Any]:
-+        """The same phase or moment at most twice; the third pull is refused."""
-+        key = (kwargs.get("phase"), kwargs.get("moment"))
-+        n = self._loop_clip_counts.get(key, 0) + 1
-+        self._loop_clip_counts[key] = n
-+        if n > 2:
-+            what = f"phase {key[0]}" if key[0] is not None else f"moment {key[1]!r}"
-+            return {
-+                "error": "clip refused",
-+                "reason": (
-+                    f"You have already watched {what} twice; a recording has nothing new "
-+                    "on a third viewing. The clip answers WHAT to do and you are stuck on "
-+                    "HOW, which the embodiment table answers: change the primitive, the "
-+                    "approach direction or the pre-pose."
-+                ),
-+                "viewings": n - 1,
-+            }
-+        return inner(**kwargs)
-+
-+    @readonly
-+    def _loop_finish(self, inner: Any, **kwargs: Any) -> dict[str, Any]:
-+        """Refuse to end an unsolved episode while the loop has rungs untried."""
-+        if self.solved():
-+            return inner(**kwargs)
-+        clips = sum(self._loop_clip_counts.values())
-+        grasps = self._loop_grasp_calls
-+        acts = self._loop_action_calls
-+        missing = []
-+        if clips < 1:
-+            missing.append("no clip has been pulled (loop step 1: watch the sub-goal's phase or moment before its first action)")
-+        if grasps < 6:
-+            missing.append(f"only {grasps} grasp attempts (the table gives pi0_pick 3, then rung a gives 3 more at a new approach)")
-+        if acts < 20:
-+            missing.append(f"only {acts} primitive calls in an episode with 100 turns")
-+        stuck = (
-+            self._loop_finish_refusals >= 3
-+            and self._loop_action_calls == self._loop_calls_at_refusal
-+        )
-+        if not missing or stuck:
-+            return inner(**kwargs)
-+        self._loop_finish_refusals += 1
-+        self._loop_calls_at_refusal = self._loop_action_calls
-+        return {
-+            "error": "finish refused",
-+            "reason": (
-+                "The task is not solved and the loop has rungs untried: "
-+                + "; ".join(missing)
-+                + ". The base prompt's SINGLE-ATTEMPT exit does not apply here - that rule "
-+                "forbids `reset`, it does not license stopping early. Continue: pull the "
-+                "clip for the sub-goal you are on if you have not, run the table's "
-+                "attempts back to back, test progress on the task object, escalate one "
-+                "rung at a time. `finish` is accepted once the task is solved or the "
-+                "turn budget is spent."
-+            ),
-+            "refusals": self._loop_finish_refusals,
-+        }
- 
+-
      def _execute_primitive(self, name: str, handler: Any, **kwargs: Any) -> Any:
-+        if self._loop:
-+            self._loop_action_calls += 1
-+            if name in ("pi0_pick", "pick", "pi0_doubled"):
-+                self._loop_grasp_calls += 1
          self._primitives.begin_primitive(name)
          try:
-             return handler(**kwargs)
 diff --git a/rpent/planner/codex.py b/rpent/planner/codex.py
 index 0db953a9..f5327138 100644
 --- a/rpent/planner/codex.py
@@ -1303,10 +724,10 @@ index 00000000..a75f01db
 +    return task_map(video.index, cross_task=cross_task)
 diff --git a/robots/libero/task_video.py b/robots/libero/task_video.py
 new file mode 100644
-index 00000000..7f657953
+index 00000000..9e5df63e
 --- /dev/null
 +++ b/robots/libero/task_video.py
-@@ -0,0 +1,264 @@
+@@ -0,0 +1,183 @@
 +# Copyright 2026 The RPent Authors.
 +#
 +# Licensed under the Apache License, Version 2.0 (the "License");
@@ -1344,17 +765,6 @@ index 00000000..7f657953
 +
 +#: Contact sheets returned by one ``view_task_video`` call.
 +SHEETS_PER_PART = 4
-+
-+#: "full" stores (``video_icl/build_full_videos.py``) hold the complete recording as images of
-+#: one second of consecutive frames; this many of them come back per ``view_task_video`` call.
-+FULL_KIND = "full_video"
-+FULL_PER_PART = 6
-+FULL_DESCRIPTION = (
-+    "The complete recording of the demonstration: every frame its cameras recorded, in time "
-+    "order, at the control rate and the recorded resolution (128 px). Each image is one second "
-+    "of consecutive frames, left to right then top to bottom; each frame shows the agentview "
-+    "camera above the wrist camera and is stamped with its demonstration step."
-+)
 +
 +CROSS_TASK_CAVEAT = (
 +    "The instruction this demonstration was recorded for is stated above as "
@@ -1404,37 +814,6 @@ index 00000000..7f657953
 +}
 +
 +
-+#: ``--task-video-mode full``: the same tool name, describing the complete recording instead
-+#: of keyframes.
-+TOOL_SPEC_FULL: dict[str, Any] = {
-+    "name": "view_task_video",
-+    "description": (
-+        "Watch the demonstration video of THIS task from the video memory layer: the COMPLETE "
-+        "recording, every frame at the control rate, as images of one second of consecutive "
-+        "frames each (agentview above wrist, each frame stamped with its step). Read-only: it "
-+        "does not move the robot. Call it before planning; pass part=2, 3, ... for the later "
-+        "seconds of the demonstration."
-+    ),
-+    "input_schema": TOOL_SPEC["input_schema"],
-+}
-+
-+
-+#: ``--task-video-mode sheets_min | full_min`` (minimal-description ablation, 2026-09-28):
-+#: images only; the store (``video_icl/build_plain_videos.py``) carries no text at all.
-+TOOL_SPEC_MIN: dict[str, Any] = {
-+    "name": "view_task_video",
-+    "description": (
-+        "Show the demonstration of this task as images. Read-only: it does not move the "
-+        "robot. Pass part=2, 3, ... for the later parts."
-+    ),
-+    "input_schema": {
-+        "type": "object",
-+        "properties": {"part": {"type": "integer", "minimum": 1, "description": "1-based part (default 1, the earliest)."}},
-+        "required": [],
-+    },
-+}
-+
-+
 +@dataclass(frozen=True)
 +class TaskVideo:
 +    """One demonstration video in the store."""
@@ -1452,18 +831,9 @@ index 00000000..7f657953
 +        return str(self.index.get("source") or "a recorded demonstration of this task")
 +
 +    @property
-+    def is_full(self) -> bool:
-+        """True for a complete-recording store built by ``video_icl/build_full_videos.py``."""
-+        return self.index.get("kind") == FULL_KIND
-+
-+    @property
-+    def per_part(self) -> int:
-+        return FULL_PER_PART if self.is_full else SHEETS_PER_PART
-+
-+    @property
 +    def n_parts(self) -> int:
 +        sheets = self.index.get("sheets") or []
-+        return max(1, -(-len(sheets) // self.per_part))
++        return max(1, -(-len(sheets) // SHEETS_PER_PART))
 +
 +    def part(self, part: int, *, cross_task: bool = False) -> dict[str, Any]:
 +        """Payload for one page: captions plus the sheet images of that page."""
@@ -1471,8 +841,8 @@ index 00000000..7f657953
 +        if not sheets:
 +            return {"error": f"video {self.video_id} has no sheets"}
 +        part = max(1, min(int(part), self.n_parts))
-+        start = (part - 1) * self.per_part
-+        page = sheets[start : start + self.per_part]
++        start = (part - 1) * SHEETS_PER_PART
++        page = sheets[start : start + SHEETS_PER_PART]
 +        shown = {i for sheet in page for i in sheet.get("frames", [])}
 +        frames = [f for f in self.index.get("frames", []) if f.get("i") in shown]
 +        images: list[bytes] = []
@@ -1482,11 +852,6 @@ index 00000000..7f657953
 +                images.append(path.read_bytes())
 +            except OSError as exc:  # missing sheet must not kill the run
 +                logger.warning("task video sheet unreadable: %s (%s)", path, exc)
-+        if self.index.get("minimal"):
-+            # Minimal-description ablation: the images and the paging, nothing else.
-+            return {"part": part, "n_parts": self.n_parts, "_image_series_bytes": images}
-+        if self.is_full:
-+            return self._full_payload(part, page, images, cross_task=cross_task)
 +        payload = {
 +            "video_id": self.video_id,
 +            "demonstrated_task_language": self.index.get("task_language"),
@@ -1502,31 +867,6 @@ index 00000000..7f657953
 +            payload["your_instruction"] = "read task_language from view_env_state; it may differ"
 +            payload["if_they_differ"] = CROSS_TASK_CAVEAT
 +        return payload
-+
-+    def _full_payload(self, part: int, page: list[dict[str, Any]], images: list[bytes], *, cross_task: bool) -> dict[str, Any]:
-+        """One page of the complete recording: which seconds it covers, and its images."""
-+        hz = int(self.index.get("control_hz") or 20)
-+        steps = [int(s) for sheet in page for s in sheet.get("frames", [])]
-+        a, b = (min(steps), max(steps)) if steps else (0, 0)
-+        payload = {
-+            "video_id": self.video_id,
-+            "demonstrated_task_language": self.index.get("task_language"),
-+            "source": self.index.get("source"),
-+            "caveat": CROSS_TASK_LAYOUT_CAVEAT if cross_task else CAVEAT,
-+            "what_this_is": FULL_DESCRIPTION,
-+            "part": part,
-+            "n_parts": self.n_parts,
-+            "steps_in_this_part": [a, b],
-+            "seconds_in_this_part": [round(a / hz, 2), round((b + 1) / hz, 2)],
-+            "total_frames": int(self.index.get("n_steps") or 0),
-+            "control_hz": hz,
-+            "_image_series_bytes": images,
-+        }
-+        if cross_task:
-+            payload["your_instruction"] = "read task_language from view_env_state; it may differ"
-+            payload["if_they_differ"] = CROSS_TASK_CAVEAT
-+        return payload
-+
 +
 +def load_store(root: str | Path | None) -> dict[tuple[str, int], TaskVideo]:
 +    """Index every video under ``root`` by (suite family, task id)."""
@@ -1573,10 +913,10 @@ index 00000000..7f657953
 +    return video.part(part, cross_task=cross_task)
 diff --git a/tests/unit_tests/robots/libero/test_task_video.py b/tests/unit_tests/robots/libero/test_task_video.py
 new file mode 100644
-index 00000000..81b1d863
+index 00000000..cf929ac3
 --- /dev/null
 +++ b/tests/unit_tests/robots/libero/test_task_video.py
-@@ -0,0 +1,170 @@
+@@ -0,0 +1,166 @@
 +# Copyright 2026 The RPent Authors.
 +#
 +# Licensed under the Apache License, Version 2.0 (the "License");
@@ -1709,17 +1049,13 @@ index 00000000..81b1d863
 +
 +def test_prompt_section_and_step_appear_only_when_a_video_is_bound() -> None:
 +    bundle = PromptBundle(system=system_prompt, user=user_prompt)
-+    with_video = bundle.render("system", variables={**PROMPT_VARS, "task_video": True})
-+    without = bundle.render("system", variables={**PROMPT_VARS, "task_video": False})
++    local = {**PROMPT_VARS, "memory_profile": "local"}
++    with_video = bundle.render("system", variables={**local, "task_video": True})
++    without = bundle.render("system", variables={**local, "task_video": False})
 +    assert "TASK VIDEO MEMORY" in with_video and "view_task_video" in with_video
-+    assert "human teleoperation demonstration" in with_video and "2 part(s)" in with_video
++    assert "view_task_map" in with_video and "view_demo_clip" in with_video
++    assert "2 part(s)" in with_video and "LOCAL exploration corpus" in with_video
 +    assert "TASK VIDEO" not in without and "view_task_video" not in without
-+    # the baseline prompt is untouched: the video build only prepends one step
-+    assert without in with_video or len(with_video) > len(without)
-+    local = bundle.render(
-+        "system", variables={**PROMPT_VARS, "memory_profile": "local", "task_video": True}
-+    )
-+    assert "TASK VIDEO MEMORY" in local and "LOCAL exploration corpus" in local
 +
 +
 +def test_local_profile_prompt_carries_the_cross_task_block_when_flagged():

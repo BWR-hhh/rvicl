@@ -7,13 +7,10 @@ LLM Robot Agents") on LIBERO-PRO, built on [RPent / HarnessVLA](https://github.c
 
 ```
 patches/rvicl-libero.patch   changes to RPent (robots/libero + two core files); applies to commit d6daf341
-patches/files/               the same files in full, for reading
-prompts/                     sha256 checked by scripts/check_final_prompts.py before a run
 scripts/apply_patch.sh       clone RPent at the base commit and apply the patch
 scripts/start_services.sh    start the shared Pi0.5 and SAM 3 servers
 scripts/run_cell.sh          run one cell
 scripts/run_sweep.py         run many cells with resume, retries and scoring from the simulator
-scripts/check_final_prompts.py   prompt hash check
 scripts/fetch_memory.py      download the LIBERO memory corpus at the pinned revision
 benchmark_patches/           task files for three LIBERO-PRO tasks, installed by benchmark_patches/install.py
 ```
@@ -112,7 +109,6 @@ A sweep (eight suites x ten tasks x seeds 1-3, resumable):
 ```bash
 python scripts/run_sweep.py --suites all --tasks 0-9 --seeds 1-3 --gpu 0 --parallel 2
 python scripts/run_sweep.py --suites libero_10_swap --tasks 4 --seeds 1 --dry-run   # print the commands
-python scripts/run_sweep.py --suites all --seeds 1 --no-video                         # text-memory baseline
 ```
 
 Rows go to `<out>/results.csv` (default `workspace/runs/sweep/`); a cell with a valid row is skipped
@@ -123,7 +119,7 @@ re-run. The summary table is printed at the end.
 
 Defaults: `--max-turns 100`, `--planner-timeout-s 5000`, `--cell-timeout-s 7200`,
 `--max-episode-steps 10000`, `--reasoning-effort low`. Seeds 1-3 only: seed 0 is the seed the
-shipped memory corpus was built on. Each cell in flight adds roughly 3 GB of host memory on top of
+memory corpus was built on. Each cell in flight adds roughly 3 GB of host memory on top of
 the shared services.
 
 ## Citation
