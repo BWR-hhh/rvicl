@@ -930,35 +930,3 @@ It is the complete video, every frame in time order: each image shows one second
 frames, left to right and top to bottom; each frame is the agentview camera (top) and the wrist
 camera (bottom)."""
 
-
-#: LIBERO-Plus (2026-09-29): what a LIBERO-Plus cell is and where its memory comes from. Given to
-#: every arm, so it describes the benchmark and says nothing about how to act.
-LIBERO_PLUS_EPISODE = """This episode is from LIBERO-Plus, not LIBERO-PRO. Your cell is a perturbed variant of base
-task {{memory_task}} of `{{suite}}`: the standard LIBERO task whose instruction is the `task_language`
-returned by `view_env_state`. One perturbation has been applied to its scene, and you are not told
-which. It can be the camera viewpoint (position, angle or field of view), the robot's initial
-joint pose, the lighting, the table and wall textures, noise on the camera images, the object
-layout (extra distractor objects on the table, or the target placed elsewhere), or the wording
-of the instruction.
-- The camera calibration behind `back_project` is read from this episode's own simulator, so it
-  stays valid when the camera has moved.
-- The text memory was explored on LIBERO-PRO's `{{memory_suite}}` suite, task {{memory_task}}: the
-  same base task (same objects, same goal) with the object positions swapped. Its suite leaf and
-  seed-0 references describe THIS task, and every coordinate in them is stale, exactly as for a
-  swap seed."""
-
-
-#: LIBERO-Plus addendum to the demonstration prompt (video arms only): the demonstration is of
-#: the unperturbed base scene.
-TASK_VIDEO_PLUS = """⚠ THE DEMONSTRATION WAS RECORDED IN THE UNPERTURBED SCENE. It shows the base task under its
-original instruction (`demonstrated_task_language`), filmed from the default camera, under the
-default lighting and textures, with the base scene's own set of objects. Your episode
-differs from it in one of the ways listed under LIBERO-PLUS EPISODE. So the demonstration is
-evidence about the TASK, not about your IMAGES: take from it which objects are involved, where
-each one ends up, in what order, where each is grasped, and what must be true before release.
-Never match it to your scene by position in the frame, by colour or brightness, or by viewing
-angle: an object that looks darker, sits elsewhere or is seen from another side is still the
-same object, and an object the demonstration does not contain is a distractor unless your
-instruction names it. If your instruction is worded differently from
-`demonstrated_task_language`, state in one line which demonstrated object and destination each
-of its phrases refers to before you plan."""

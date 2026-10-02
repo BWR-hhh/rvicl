@@ -159,8 +159,8 @@ def get_toolkit(
     explore = mode == "exploration"
     video = task_video.resolve(
         config.prompt_vars.get("task_video_dir"),
-        config.prompt_vars.get("memory_suite") or config.prompt_vars.get("suite"),
-        config.prompt_vars.get("memory_task", config.prompt_vars.get("task")),
+        config.prompt_vars.get("suite"),
+        config.prompt_vars.get("task"),
     )
     memory = MemoryManager(
         root=config.prompt_vars.get("memory_dir") or get_memory_dir("libero"),
@@ -247,21 +247,6 @@ def _add_cli_args(parser: argparse.ArgumentParser, use_dashboard: bool) -> None:
     )
     parser.add_argument("--task", type=int, default=None, required=required)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument(
-        "--memory-suite",
-        default=None,
-        help=(
-            "Suite whose memory and task video key this cell (default: --suite). LIBERO-Plus "
-            "cells index thousands of perturbed variants; they are keyed to the LIBERO-PRO "
-            "*_swap suite of their base task."
-        ),
-    )
-    parser.add_argument(
-        "--memory-task",
-        type=int,
-        default=None,
-        help="Task id within --memory-suite (default: --task); the base task of a LIBERO-Plus cell.",
-    )
     parser.add_argument(
         "--collect-flywheel-data",
         action="store_true",
@@ -380,12 +365,7 @@ def _parse_config(args: argparse.Namespace) -> RunConfig:
                 f"local memory corpus not found at {memory_dir}; "
                 "run exploration first or use --memory-profile hf"
             )
-    memory_suite = getattr(args, "memory_suite", None) or args.suite
-    memory_task = getattr(args, "memory_task", None)
-    memory_task = args.task if memory_task is None else memory_task
-    video = task_video.resolve(
-        getattr(args, "task_video_dir", None), memory_suite, memory_task
-    )
+    video = task_video.resolve(getattr(args, "task_video_dir", None), args.suite, args.task)
     # An empty corpus must be described as empty: telling the planner to read three layers
     # that do not exist costs turns and implies a recipe exists somewhere.
     corpus_empty = False
@@ -408,15 +388,12 @@ def _parse_config(args: argparse.Namespace) -> RunConfig:
         "suite": args.suite,
         "task": args.task,
         "seed": args.seed,
-        "memory_suite": memory_suite,
-        "memory_task": memory_task,
-        "libero_plus": (args.libero_type or os.environ.get("LIBERO_TYPE")) == "plus",
         "recipe_tag": recipe_tag,
         "mode": "explore" if explore else "eval",
         "memory_profile": memory_profile,
         "memory_dir": str(memory_dir),
         "task_video_dir": str(getattr(args, "task_video_dir", "") or ""),
-        "reference_tag": f"{memory_suite.replace('libero_', '')}_t{memory_task}_s0",
+        "reference_tag": f"{args.suite.replace('libero_', '')}_t{args.task}_s0",
         # Per-cell inbox: parallel explore runs must not append to a shared file.
         "memory_inbox": str(memory_dir / "_internal" / "inbox" / recipe_tag),
         "session_number": 1,
