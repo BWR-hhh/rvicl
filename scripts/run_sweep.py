@@ -35,7 +35,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = Path(os.environ.get("RVICL_ROOT", HERE.parents[1]))
 REPO = Path(os.environ.get("RPENT_DIR", ROOT / "RPent"))
 STORE = Path(os.environ.get("RVICL_VIDEO_STORE", ROOT / "task_videos"))
-MEMORY = Path(os.environ.get("RVICL_MEMORY_DIR", REPO / "memory" / "libero"))
+MEMORY = Path(os.environ.get("RVICL_MEMORY_DIR", ROOT / "memory" / "libero"))
 
 SUITES = (
     "libero_spatial_swap", "libero_spatial_task", "libero_object_swap", "libero_object_task",

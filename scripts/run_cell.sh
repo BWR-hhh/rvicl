@@ -10,7 +10,7 @@ HERE="$(cd "$(dirname "$0")/.." && pwd)"
 ROOT="${RVICL_ROOT:-$(cd "$HERE/.." && pwd)}"
 RPENT="${RPENT_DIR:-$ROOT/RPent}"
 STORE="${RVICL_VIDEO_STORE:-$ROOT/task_videos}"
-MEMORY="${RVICL_MEMORY_DIR:-$RPENT/memory/libero}"
+MEMORY="${RVICL_MEMORY_DIR:-$ROOT/memory/libero}"
 SUITE="$1"; TASK="$2"; SEED="$3"; shift 3
 OUT="$ROOT/runs/$(date +%Y%m%d_%H%M%S)_${SUITE}_t${TASK}_s${SEED}"
 mkdir -p "$OUT"

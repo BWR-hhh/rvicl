@@ -28,6 +28,8 @@ PROMPT_VARS = {
     "suite": "libero_10_swap",
     "task": 4,
     "seed": 1,
+    "memory_suite": "libero_10_swap",
+    "memory_task": 4,
     "recipe_tag": "10_swap_t4_s1",
     "mode": "eval",
     "memory_profile": "hf",
