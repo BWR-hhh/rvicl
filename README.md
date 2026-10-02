@@ -3,16 +3,6 @@
 A runnable pipeline for **RV-ICL** ("Look Only as Needed: Recursive Video In-Context Learning for
 LLM Robot Agents") on LIBERO-PRO, built on [RPent / HarnessVLA](https://github.com/RLinf/RPent).
 
-```
-video store (released archive)       RPent run (one cell = suite, task, seed)
-------------------------------       ----------------------------------------
-task_videos/<video_id>/              --task-video-dir <store> --task-video-mode both
-  index.json  (phases, moments)        -> prompt section TASK VIDEO (system.py: TASK_VIDEO_BOTH)
-  sheet_*.png (keyframes)              -> tools: view_task_video   (16 keyframes, paged)
-  agentview.npy, wrist.npy                      view_task_map     (goal, phases, moments as text)
-                                                view_demo_clip    (~20 recorded frames of one phase/moment)
-```
-
 ## What is in this repository
 
 ```
