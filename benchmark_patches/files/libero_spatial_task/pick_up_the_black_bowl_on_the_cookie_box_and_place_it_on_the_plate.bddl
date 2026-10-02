@@ -129,7 +129,7 @@
   )
 
   (:goal
-  (On akita_black_bowl_2 plate_1))
+  (And (On akita_black_bowl_2 plate_1))
 )
 
 )
