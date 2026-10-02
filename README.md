@@ -24,6 +24,7 @@ scripts/start_services.sh    start the shared Pi0.5 and SAM 3 servers
 scripts/run_cell.sh          run one cell
 scripts/run_sweep.py         run many cells with resume, retries and scoring from the simulator
 scripts/check_final_prompts.py   prompt hash check
+scripts/fetch_memory.py      download the LIBERO memory corpus at the pinned revision
 benchmark_patches/           task files for three LIBERO-PRO tasks, installed by benchmark_patches/install.py
 ```
 
@@ -38,6 +39,7 @@ workspace/
   rvicl/             this repository
   RPent/             upstream RPent at d6daf341 + patches/rvicl-libero.patch
   task_videos/       the per-task video store (40 videos)
+  memory/libero/     the LIBERO memory corpus (scripts/fetch_memory.py)
   runs/              outputs
 ```
 
@@ -68,10 +70,17 @@ RPent environment:
 python benchmark_patches/install.py
 ```
 
-**4. The video store.** Unpack the released `task_videos_libero.tar.gz` into `workspace/task_videos/`
+**4. The memory corpus.** RPent's LIBERO memory comes from the Hugging Face dataset
+`RLinf/RPent-memory`, which was reorganised after these runs; fetch the pinned revision once:
+
+```bash
+python scripts/fetch_memory.py
+```
+
+**5. The video store.** Unpack the released `task_videos_libero.tar.gz` into `workspace/task_videos/`
 (one directory per base task, 40 in all), or point `RVICL_VIDEO_STORE` at wherever you put it.
 
-**5. Services.** One Pi0.5 server and one SAM 3 server are shared by every cell:
+**6. Services.** One Pi0.5 server and one SAM 3 server are shared by every cell:
 
 ```bash
 scripts/start_services.sh 0 8220 8114
