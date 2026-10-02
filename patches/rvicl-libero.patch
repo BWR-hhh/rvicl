@@ -171,10 +171,10 @@ index 5804c7b4..064436c7 100644
          "OUTPUT DISCIPLINE": base.OUTPUT_DISCIPLINE,
      }
 diff --git a/robots/libero/prompts/system.py b/robots/libero/prompts/system.py
-index f22f79b7..15756fb0 100644
+index f22f79b7..4f00c898 100644
 --- a/robots/libero/prompts/system.py
 +++ b/robots/libero/prompts/system.py
-@@ -513,3 +513,420 @@ OUTPUT_DISCIPLINE = """- Brief reasoning before each tool call (1-2 sentences):
+@@ -513,3 +513,419 @@ OUTPUT_DISCIPLINE = """- Brief reasoning before each tool call (1-2 sentences):
    returned the new state.
  - Save the audit BEFORE calling `finish`.
  - Stop immediately after writing the audit and calling `finish`. Do not chat further."""
@@ -594,7 +594,6 @@ index f22f79b7..15756fb0 100644
 +It is the complete video, every frame in time order: each image shows one second of consecutive
 +frames, left to right and top to bottom; each frame is the agentview camera (top) and the wrist
 +camera (bottom)."""
-+
 diff --git a/robots/libero/robot_spec.py b/robots/libero/robot_spec.py
 index 167fdc6b..1708b916 100644
 --- a/robots/libero/robot_spec.py
