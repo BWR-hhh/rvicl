@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+runs/
+task_videos*/
+codex_home*/
+claude_home*/
+*.tar.gz
+.env
+harness.env

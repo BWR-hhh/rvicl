@@ -1,0 +1,154 @@
+# RV-ICL on LIBERO
+
+A runnable pipeline for **RV-ICL** ("Look Only as Needed: Recursive Video In-Context Learning for
+LLM Robot Agents") on LIBERO-PRO, built on [RPent / HarnessVLA](https://github.com/RLinf/RPent).
+
+```
+LIBERO demonstration (demo_0)        RPent run (one cell = suite, task, seed)
+-----------------------------        ----------------------------------------
+video_store/build_*.py               --task-video-dir <store> --task-video-mode both
+  -> task_videos/<video_id>/           -> prompt section TASK VIDEO (system.py: TASK_VIDEO_BOTH)
+       index.json  (phases, moments)   -> tools: view_task_video   (16 keyframes, paged)
+       sheet_*.png (keyframes)                  view_task_map     (goal, phases, moments as text)
+       agentview.npy, wrist.npy                 view_demo_clip    (~20 recorded frames of one phase/moment)
+```
+
+## What is in this repository
+
+```
+patches/rvicl-libero.patch   changes to RPent (robots/libero + two core files); applies to commit d6daf341
+patches/files/               the same files in full, for reading
+prompts/                     sha256 checked by scripts/check_final_prompts.py before a run
+scripts/apply_patch.sh       clone RPent at the base commit and apply the patch
+scripts/start_services.sh    start the shared Pi0.5 and SAM 3 servers
+scripts/run_cell.sh          run one cell
+scripts/run_sweep.py         run many cells with resume, retries and scoring from the simulator
+scripts/check_final_prompts.py   prompt hash check
+video_store/                 build the per-task video store from the LIBERO demonstrations
+benchmark_patches/           fix for three LIBERO-PRO tasks that ship with malformed BDDL goals
+```
+
+## Setup
+
+The workspace is a directory that holds this repository, the patched RPent checkout, the video
+store and the run outputs side by side; every path can be overridden with the variables in
+`.env.example` (`RVICL_ROOT`, `RPENT_DIR`, `RVICL_VIDEO_STORE`, `RVICL_MEMORY_DIR`).
+
+```
+workspace/
+  rvicl/             this repository
+  RPent/             upstream RPent at d6daf341 + patches/rvicl-libero.patch
+  task_videos/       the per-task video store (40 videos)
+  runs/              outputs
+```
+
+**1. RPent.** Python 3.11. Clone the upstream repository, check out the base commit, apply the
+patch, install with the LIBERO-PRO extra and download the simulator assets (the
+[RPent README](https://github.com/RLinf/RPent#quick-start) has the details and the other planners):
+
+```bash
+git clone https://github.com/BWR-hhh/rvicl.git
+rvicl/scripts/apply_patch.sh RPent          # clone + checkout d6daf341 + git apply
+cd RPent && python -m venv .venv && source .venv/bin/activate
+pip install -e ".[libero-pro]"
+liberopro-download-assets --skip-existing
+```
+
+Tested with `rpent-liberopro 0.2.0`, `robosuite 1.5.2`, `mujoco 3.3.0`, `torch 2.7.1+cu128`,
+`openai-codex 0.154.0`. The patch adds `robots/libero/task_video.py` and `demo_clip.py` (the three
+tools), the prompt sections and the CLI flags `--task-video-dir`, `--task-video-mode`,
+`--task-video-cross-task`, and touches two core files: `rpent/tools/toolkit.py` (a tool result may
+carry an ordered series of images) and `rpent/planner/codex.py` (a provider error the SDK retries
+by itself no longer invalidates the cell). Without `--task-video-dir` the patched RPent behaves
+exactly like upstream.
+
+**2. Checkpoints and keys.** Pi0.5 (`RLinf/RLinf-Pi05-LIBERO-130-fullshot-SFT`) and SAM 3 as in the
+RPent README; export `PI05_CHECKPOINT_PATH`, `SAM3_CHECKPOINT_PATH` and `LIBERO_TYPE=pro`. The
+planner is `gpt-6-astra` through the Codex SDK: set `OPENAI_API_KEY` / `CODEX_API_KEY` (and the base
+URLs if you use a relay). Copy `.env.example` to `.env` and source it.
+
+**3. Three malformed LIBERO-PRO tasks.** `libero_10_task` t2 and `libero_spatial_task` t3/t7 ship
+with unbalanced `(:goal ...)` expressions and empty layout files, so they cannot be built. Apply the
+fix once inside the RPent environment (see [benchmark_patches/README.md](benchmark_patches/README.md)):
+
+```bash
+python benchmark_patches/patch_liberopro_tasks.py fix
+python benchmark_patches/patch_liberopro_tasks.py layouts
+```
+
+**4. The video store.** Unpack the released `task_videos_libero.tar.gz` into `workspace/task_videos/`,
+or rebuild it from the original LIBERO demonstrations ([video_store/README.md](video_store/README.md)).
+Each of the 40 base tasks (`libero_spatial`, `libero_object`, `libero_goal`, `libero_10` x 10) gets
+one directory with `index.json`, eight contact sheets and the recorded frames for clips.
+
+**5. Services.** One Pi0.5 server and one SAM 3 server are shared by every cell:
+
+```bash
+scripts/start_services.sh 0 8220 8114
+export RPENT_VLA_ENDPOINT=http://127.0.0.1:8220 RPENT_SAM3_ENDPOINT=http://127.0.0.1:8114
+```
+
+Leave the two variables unset and every cell starts its own servers instead.
+
+## Running
+
+One cell (the RPent environment activated, the services running):
+
+```bash
+scripts/run_cell.sh libero_10_swap 4 1
+scripts/run_cell.sh libero_10_task 2 1 --task-video-cross-task
+```
+
+The `*_task` suites rewrite the goal of every task (t2 demonstrates a moka pot where the suite asks
+for a pan) and LIBERO-PRO ships no demonstrations of its own, so those suites get
+`--task-video-cross-task`, which tells the planner the demonstration was recorded for the original
+instruction. `run_sweep.py` adds it by itself.
+
+A sweep (eight suites x ten tasks x seeds 1-3, resumable):
+
+```bash
+python scripts/run_sweep.py --suites all --tasks 0-9 --seeds 1-3 --gpu 0 --parallel 2
+python scripts/run_sweep.py --suites libero_10_swap --tasks 4 --seeds 1 --dry-run   # print the commands
+python scripts/run_sweep.py --suites all --seeds 1 --no-video                         # text-memory baseline
+```
+
+Rows go to `<out>/results.csv` (default `workspace/runs/sweep/`); a cell with a valid row is skipped
+on the next start. A cell is solved when the run's `states.json` reports `terminated` (the
+simulator's own flag). An attempt the provider rejected (quota, policy, a stream drop the SDK never
+recovered from) is marked invalid and retried up to `--attempts` times; an episode itself is never
+re-run. The summary table is printed at the end.
+
+Defaults: `--max-turns 100`, `--planner-timeout-s 5000`, `--cell-timeout-s 7200`,
+`--max-episode-steps 10000`, `--reasoning-effort low`. Seeds 1-3 only: seed 0 is the seed the
+shipped memory corpus was built on. Each cell in flight adds roughly 3 GB of host memory on top of
+the shared services.
+
+## Citation
+
+RV-ICL is under review; a citation entry will be added when the paper is public.
+
+```bibtex
+@article{rvicl2026,
+  title = {Look Only as Needed: Recursive Video In-Context Learning for LLM Robot Agents},
+  year  = {2026},
+}
+```
+
+This work builds on RPent / HarnessVLA:
+
+```bibtex
+@article{zhang2026harnessvla,
+  title   = {Harness VLA: Steering Frozen VLAs into Reliable Manipulation Primitives via Memory-Guided Agents},
+  author  = {Zhang, Yixian and Zhang, Huanming and Gao, Feng and Li, Xiao and Liu, Zhihao and Zhu, Chunyang and Qiu, Jiaxing and Yan, Yuchen and Liu, Jiyuan and Tang, Wenhao and Fang, Zhengru and Nie, Yi and others},
+  journal = {arXiv preprint arXiv:2607.08448},
+  year    = {2026}
+}
+```
+
+The demonstrations come from [LIBERO](https://github.com/Lifelong-Robot-Learning/LIBERO); LIBERO-PRO
+ships with RPent as `liberopro`.
+
+## License
+
+Apache License 2.0, the license of RPent, for the patch, the scripts and the prompt (`LICENSE`).
+The demonstrations in the video store derive from the LIBERO datasets and keep their license.
