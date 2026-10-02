@@ -22,7 +22,7 @@ cd "$RPENT"
 echo "output dir: $OUT"
 exec rpent --robot libero --libero-type "${LIBERO_TYPE:-pro}" \
   --suite "$SUITE" --task "$TASK" --seed "$SEED" \
-  --planner codex --model "${CODEX_MODEL:-gpt-6-astra}" --reasoning-effort "${REASONING_EFFORT:-low}" \
+  --planner "${RVICL_PLANNER:-codex}" --model "${RVICL_MODEL:-gpt-6-astra}" --reasoning-effort "${RVICL_REASONING_EFFORT:-low}" \
   --memory-profile local --memory-dir "$MEMORY" \
   --task-video-dir "$STORE" --task-video-mode both \
   --cuda-device "${CUDA_DEVICE:-0}" \

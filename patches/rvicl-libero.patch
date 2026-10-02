@@ -1,47 +1,3 @@
-diff --git a/robots/libero/env_server.py b/robots/libero/env_server.py
-index 86e57d9d..3198bfdb 100644
---- a/robots/libero/env_server.py
-+++ b/robots/libero/env_server.py
-@@ -18,6 +18,7 @@ from __future__ import annotations
- 
- import argparse
- import os
-+import re
- import sys
- from typing import TYPE_CHECKING, Any
- 
-@@ -275,7 +276,30 @@ class LiberoEnvFacade(BaseEnvFacade):
-         )
- 
-     def get_task_language(self) -> str | None:
--        return self._env.task_descriptions[self._env_idx]
-+        language = self._env.task_descriptions[self._env_idx]
-+        if os.environ.get("LIBERO_TYPE") == "plus" and language is not None:
-+            return _plus_instruction(self._env, self._env_idx, language)
-+        return language
-+
-+
-+#: LIBERO-Plus encodes a variant's perturbation in its task NAME, and the benchmark derives
-+#: the instruction from that name for every variant except the language rewrites, so the raw
-+#: instruction reads "... on the plate view 0 0 122 0 0 initstate 0". Cutting the name at the
-+#: perturbation suffix recovers the base LIBERO instruction (checked on all 8493 such variants).
-+_PLUS_SUFFIX = re.compile(
-+    r"(_view_\d.*|_(?:table|tb|light|add|noise|copy|lan)_\d+.*|(?:_moved)?_level\d.*|_sample.*)$"
-+)
-+
-+
-+def _plus_instruction(env, env_idx: int, language: str) -> str:
-+    task = env.task_suite.get_task(env.task_ids[env_idx])
-+    if "_language_" in task.name:  # a rewritten instruction, read from its BDDL file: keep it
-+        return language
-+    core = _PLUS_SUFFIX.sub("", task.name)
-+    if core[:1].isupper():  # LIBERO-10 names carry a SCENE prefix
-+        i = core.find("SCENE")
-+        core = core[i + (8 if "SCENE10" in core else 7):]
-+    return " ".join(core.split("_"))
- 
- 
- # ---------------------------------------------------------------------------
 diff --git a/robots/libero/prompt_bundle.py b/robots/libero/prompt_bundle.py
 index d1fce293..0bb4f92b 100644
 --- a/robots/libero/prompt_bundle.py
@@ -87,7 +43,7 @@ index d1fce293..0bb4f92b 100644
          "OUTPUT DISCIPLINE": system_parts.OUTPUT_DISCIPLINE,
      }
 diff --git a/robots/libero/prompts/local_eval.py b/robots/libero/prompts/local_eval.py
-index 5804c7b4..51ee30e0 100644
+index 5804c7b4..064436c7 100644
 --- a/robots/libero/prompts/local_eval.py
 +++ b/robots/libero/prompts/local_eval.py
 @@ -16,6 +16,8 @@
@@ -99,15 +55,6 @@ index 5804c7b4..51ee30e0 100644
  from robots.libero.prompts import system as base
  from rpent.prompt.utils import Numbered, PromptNode
  
-@@ -35,7 +37,7 @@ MEMORY_PROFILE = """Use the LOCAL exploration corpus for this evaluation. Its th
- different jobs; use every layer that is available:
- 
- 1. GLOBAL: `{{memory_dir}}/global/` — reusable robot/perception/primitive lessons.
--2. SUITE: `{{memory_dir}}/suite/suite_libero10_<regime>_t{{task}}.md` — the
-+2. SUITE: `{{memory_dir}}/suite/suite_libero10_<regime>_t{{memory_task}}.md` — the
-    task/regime strategy, validated ranges, and failure table.
- 3. TASK: `{{memory_dir}}/task_only/{{reference_tag}}.json` plus
-    `{{memory_dir}}/task_only/{{reference_tag}}_recipe.jsonl` — the matched successful
 @@ -46,6 +48,19 @@ relevant global leaves through `MEMORY.md`. Recipes are technique references,
  not coordinates: re-localize every entity in the current image. Never read
  `_internal/` during evaluation."""
@@ -128,7 +75,7 @@ index 5804c7b4..51ee30e0 100644
  STEP_READ_LOCAL_MEMORY = """READ EACH AVAILABLE LOCAL MEMORY LAYER FIRST:
  - task audit: `{{memory_dir}}/task_only/{{reference_tag}}.json`
  - task recipe: `{{memory_dir}}/task_only/{{reference_tag}}_recipe.jsonl`
-@@ -69,18 +84,96 @@ WORKFLOW_STEPS = (
+@@ -69,18 +84,91 @@ WORKFLOW_STEPS = (
  )
  
  
@@ -151,9 +98,6 @@ index 5804c7b4..51ee30e0 100644
 +    # "sheets_min" / "full_min" (ablation): images only, one-paragraph description, no watch step.
 +    video_min = video and _mode in ("sheets_min", "full_min")
 +    empty = bool((variables or {}).get("memory_corpus_empty"))
-+    # LIBERO-Plus cells: every arm is told what the benchmark perturbs and where its memory
-+    # comes from; a video arm is also told the demonstration is of the unperturbed scene.
-+    plus = bool((variables or {}).get("libero_plus"))
 +    # Ablation arm: the behavioural rules of the video prompt, no demonstration at all.
 +    rules_only = bool((variables or {}).get("task_rules")) and not video
 +    base_steps = (
@@ -172,7 +116,6 @@ index 5804c7b4..51ee30e0 100644
      return {
          "ROLE AND EVALUATION": base.ROLE_AND_EVALUATION,
 -        "MEMORY PROFILE — LOCAL SUITE + TASK + GLOBAL": MEMORY_PROFILE,
-+        **({"LIBERO-PLUS EPISODE": base.LIBERO_PLUS_EPISODE} if plus else {}),
 +        **(
 +            {
 +                (
@@ -197,7 +140,6 @@ index 5804c7b4..51ee30e0 100644
 +                    )
 +                )
 +                + ("\n\n" + base.TASK_VIDEO_CROSS_TASK if cross_task else "")
-+                + ("\n\n" + base.TASK_VIDEO_PLUS if plus else "")
 +            }
 +            if (video and not video_min)
 +            else {}
@@ -229,10 +171,10 @@ index 5804c7b4..51ee30e0 100644
          "OUTPUT DISCIPLINE": base.OUTPUT_DISCIPLINE,
      }
 diff --git a/robots/libero/prompts/system.py b/robots/libero/prompts/system.py
-index f22f79b7..13d6b65e 100644
+index f22f79b7..15756fb0 100644
 --- a/robots/libero/prompts/system.py
 +++ b/robots/libero/prompts/system.py
-@@ -513,3 +513,452 @@ OUTPUT_DISCIPLINE = """- Brief reasoning before each tool call (1-2 sentences):
+@@ -513,3 +513,420 @@ OUTPUT_DISCIPLINE = """- Brief reasoning before each tool call (1-2 sentences):
    returned the new state.
  - Save the audit BEFORE calling `finish`.
  - Stop immediately after writing the audit and calling `finish`. Do not chat further."""
@@ -653,40 +595,8 @@ index f22f79b7..13d6b65e 100644
 +frames, left to right and top to bottom; each frame is the agentview camera (top) and the wrist
 +camera (bottom)."""
 +
-+
-+#: LIBERO-Plus (2026-09-29): what a LIBERO-Plus cell is and where its memory comes from. Given to
-+#: every arm, so it describes the benchmark and says nothing about how to act.
-+LIBERO_PLUS_EPISODE = """This episode is from LIBERO-Plus, not LIBERO-PRO. Your cell is a perturbed variant of base
-+task {{memory_task}} of `{{suite}}`: the standard LIBERO task whose instruction is the `task_language`
-+returned by `view_env_state`. One perturbation has been applied to its scene, and you are not told
-+which. It can be the camera viewpoint (position, angle or field of view), the robot's initial
-+joint pose, the lighting, the table and wall textures, noise on the camera images, the object
-+layout (extra distractor objects on the table, or the target placed elsewhere), or the wording
-+of the instruction.
-+- The camera calibration behind `back_project` is read from this episode's own simulator, so it
-+  stays valid when the camera has moved.
-+- The text memory was explored on LIBERO-PRO's `{{memory_suite}}` suite, task {{memory_task}}: the
-+  same base task (same objects, same goal) with the object positions swapped. Its suite leaf and
-+  seed-0 references describe THIS task, and every coordinate in them is stale, exactly as for a
-+  swap seed."""
-+
-+
-+#: LIBERO-Plus addendum to the demonstration prompt (video arms only): the demonstration is of
-+#: the unperturbed base scene.
-+TASK_VIDEO_PLUS = """⚠ THE DEMONSTRATION WAS RECORDED IN THE UNPERTURBED SCENE. It shows the base task under its
-+original instruction (`demonstrated_task_language`), filmed from the default camera, under the
-+default lighting and textures, with the base scene's own set of objects. Your episode
-+differs from it in one of the ways listed under LIBERO-PLUS EPISODE. So the demonstration is
-+evidence about the TASK, not about your IMAGES: take from it which objects are involved, where
-+each one ends up, in what order, where each is grasped, and what must be true before release.
-+Never match it to your scene by position in the frame, by colour or brightness, or by viewing
-+angle: an object that looks darker, sits elsewhere or is seen from another side is still the
-+same object, and an object the demonstration does not contain is a distractor unless your
-+instruction names it. If your instruction is worded differently from
-+`demonstrated_task_language`, state in one line which demonstrated object and destination each
-+of its phrases refers to before you plan."""
 diff --git a/robots/libero/robot_spec.py b/robots/libero/robot_spec.py
-index 167fdc6b..35803843 100644
+index 167fdc6b..1708b916 100644
 --- a/robots/libero/robot_spec.py
 +++ b/robots/libero/robot_spec.py
 @@ -17,12 +17,14 @@
@@ -710,8 +620,8 @@ index 167fdc6b..35803843 100644
      explore = mode == "exploration"
 +    video = task_video.resolve(
 +        config.prompt_vars.get("task_video_dir"),
-+        config.prompt_vars.get("memory_suite") or config.prompt_vars.get("suite"),
-+        config.prompt_vars.get("memory_task", config.prompt_vars.get("task")),
++        config.prompt_vars.get("suite"),
++        config.prompt_vars.get("task"),
 +    )
      memory = MemoryManager(
          root=config.prompt_vars.get("memory_dir") or get_memory_dir("libero"),
@@ -776,38 +686,11 @@ index 167fdc6b..35803843 100644
      parser.add_argument(
          "--libero-type",
          default=None,
-@@ -194,6 +247,21 @@ def _add_cli_args(parser: argparse.ArgumentParser, use_dashboard: bool) -> None:
-     )
-     parser.add_argument("--task", type=int, default=None, required=required)
-     parser.add_argument("--seed", type=int, default=0)
-+    parser.add_argument(
-+        "--memory-suite",
-+        default=None,
-+        help=(
-+            "Suite whose memory and task video key this cell (default: --suite). LIBERO-Plus "
-+            "cells index thousands of perturbed variants; they are keyed to the LIBERO-PRO "
-+            "*_swap suite of their base task."
-+        ),
-+    )
-+    parser.add_argument(
-+        "--memory-task",
-+        type=int,
-+        default=None,
-+        help="Task id within --memory-suite (default: --task); the base task of a LIBERO-Plus cell.",
-+    )
-     parser.add_argument(
-         "--collect-flywheel-data",
-         action="store_true",
-@@ -312,15 +380,43 @@ def _parse_config(args: argparse.Namespace) -> RunConfig:
+@@ -312,7 +365,26 @@ def _parse_config(args: argparse.Namespace) -> RunConfig:
                  f"local memory corpus not found at {memory_dir}; "
                  "run exploration first or use --memory-profile hf"
              )
-+    memory_suite = getattr(args, "memory_suite", None) or args.suite
-+    memory_task = getattr(args, "memory_task", None)
-+    memory_task = args.task if memory_task is None else memory_task
-+    video = task_video.resolve(
-+        getattr(args, "task_video_dir", None), memory_suite, memory_task
-+    )
++    video = task_video.resolve(getattr(args, "task_video_dir", None), args.suite, args.task)
 +    # An empty corpus must be described as empty: telling the planner to read three layers
 +    # that do not exist costs turns and implies a recipe exists somewhere.
 +    corpus_empty = False
@@ -830,289 +713,14 @@ index 167fdc6b..35803843 100644
          "suite": args.suite,
          "task": args.task,
          "seed": args.seed,
-+        "memory_suite": memory_suite,
-+        "memory_task": memory_task,
-+        "libero_plus": (args.libero_type or os.environ.get("LIBERO_TYPE")) == "plus",
-         "recipe_tag": recipe_tag,
+@@ -320,6 +392,7 @@ def _parse_config(args: argparse.Namespace) -> RunConfig:
          "mode": "explore" if explore else "eval",
          "memory_profile": memory_profile,
          "memory_dir": str(memory_dir),
--        "reference_tag": f"{args.suite.replace('libero_', '')}_t{args.task}_s0",
 +        "task_video_dir": str(getattr(args, "task_video_dir", "") or ""),
-+        "reference_tag": f"{memory_suite.replace('libero_', '')}_t{memory_task}_s0",
+         "reference_tag": f"{args.suite.replace('libero_', '')}_t{args.task}_s0",
          # Per-cell inbox: parallel explore runs must not append to a shared file.
          "memory_inbox": str(memory_dir / "_internal" / "inbox" / recipe_tag),
-         "session_number": 1,
-diff --git a/robots/libero/task_video.py b/robots/libero/task_video.py
-new file mode 100644
-index 00000000..7f657953
---- /dev/null
-+++ b/robots/libero/task_video.py
-@@ -0,0 +1,264 @@
-+# Copyright 2026 The RPent Authors.
-+#
-+# Licensed under the Apache License, Version 2.0 (the "License");
-+# you may not use this file except in compliance with the License.
-+# You may obtain a copy of the License at
-+#
-+#     https://www.apache.org/licenses/LICENSE-2.0
-+#
-+# Unless required by applicable law or agreed to in writing, software
-+# distributed under the License is distributed on an "AS IS" BASIS,
-+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-+# See the License for the specific language governing permissions and
-+# limitations under the License.
-+
-+"""Per-task video memory: a demonstration of THIS task shown to the planner in-context.
-+
-+The store is built offline (``video_icl/build_videos.py``) and holds, per video, an
-+``index.json`` plus labelled contact sheets. At run time the cell's video is resolved by
-+suite family + task id, and ``view_task_video`` returns its keyframes as image blocks so
-+the planner can watch the demonstration before planning. It is read-only: it never
-+advances the environment and never reveals evaluation-scene coordinates.
-+"""
-+
-+from __future__ import annotations
-+
-+import json
-+from dataclasses import dataclass
-+from pathlib import Path
-+from typing import Any
-+
-+from rpent.tools.toolkit import readonly
-+from rpent.utils.logging import get_logger
-+
-+logger = get_logger("libero.task_video")
-+
-+#: Contact sheets returned by one ``view_task_video`` call.
-+SHEETS_PER_PART = 4
-+
-+#: "full" stores (``video_icl/build_full_videos.py``) hold the complete recording as images of
-+#: one second of consecutive frames; this many of them come back per ``view_task_video`` call.
-+FULL_KIND = "full_video"
-+FULL_PER_PART = 6
-+FULL_DESCRIPTION = (
-+    "The complete recording of the demonstration: every frame its cameras recorded, in time "
-+    "order, at the control rate and the recorded resolution (128 px). Each image is one second "
-+    "of consecutive frames, left to right then top to bottom; each frame shows the agentview "
-+    "camera above the wrist camera and is stamped with its demonstration step."
-+)
-+
-+CROSS_TASK_CAVEAT = (
-+    "The instruction this demonstration was recorded for is stated above as "
-+    "'demonstrated_task_language'. YOUR instruction is whatever `task_language` in "
-+    "view_env_state says, and it may name a DIFFERENT object or destination: this suite "
-+    "rewrites goals. When they differ, take only the TECHNIQUE from the video (approach "
-+    "direction, grasp point on that kind of object, carry height, release condition) and "
-+    "apply it to YOUR target. Never execute the demonstrated goal."
-+)
-+
-+
-+CAVEAT = (
-+    "This is a demonstration of the SAME task in a DIFFERENT layout: object positions, "
-+    "plate/basket positions and the robot start pose differ from your scene. Take the "
-+    "sub-goal order, which object goes where, the grasp point on each object, the "
-+    "approach direction, the carry height and the release behaviour. Do NOT reuse any "
-+    "coordinate from it — re-localize every entity in your own images."
-+)
-+
-+#: Layout caveat for goal-rewritten suites: the same warning as ``CAVEAT`` without calling
-+#: the demonstration "the SAME task", which the cross-task note below contradicts.
-+CROSS_TASK_LAYOUT_CAVEAT = CAVEAT.replace(
-+    "a demonstration of the SAME task in a DIFFERENT layout",
-+    "a demonstration of the ORIGINAL task of this scene (see 'if_they_differ'), in a DIFFERENT layout",
-+)
-+
-+TOOL_SPEC: dict[str, Any] = {
-+    "name": "view_task_video",
-+    "description": (
-+        "Watch the demonstration video of THIS task from the video memory layer. "
-+        "Returns labelled keyframes (agentview and wrist, captioned with step, gripper "
-+        "state, end-effector xyz and the grasp/release events) as images. Read-only: it "
-+        "does not move the robot. Call it before planning; pass part=2, 3, ... for the "
-+        "later keyframes of a long demonstration."
-+    ),
-+    "input_schema": {
-+        "type": "object",
-+        "properties": {
-+            "part": {
-+                "type": "integer",
-+                "minimum": 1,
-+                "description": "1-based page of keyframes (default 1, the earliest).",
-+            }
-+        },
-+        "required": [],
-+    },
-+}
-+
-+
-+#: ``--task-video-mode full``: the same tool name, describing the complete recording instead
-+#: of keyframes.
-+TOOL_SPEC_FULL: dict[str, Any] = {
-+    "name": "view_task_video",
-+    "description": (
-+        "Watch the demonstration video of THIS task from the video memory layer: the COMPLETE "
-+        "recording, every frame at the control rate, as images of one second of consecutive "
-+        "frames each (agentview above wrist, each frame stamped with its step). Read-only: it "
-+        "does not move the robot. Call it before planning; pass part=2, 3, ... for the later "
-+        "seconds of the demonstration."
-+    ),
-+    "input_schema": TOOL_SPEC["input_schema"],
-+}
-+
-+
-+#: ``--task-video-mode sheets_min | full_min`` (minimal-description ablation, 2026-09-28):
-+#: images only; the store (``video_icl/build_plain_videos.py``) carries no text at all.
-+TOOL_SPEC_MIN: dict[str, Any] = {
-+    "name": "view_task_video",
-+    "description": (
-+        "Show the demonstration of this task as images. Read-only: it does not move the "
-+        "robot. Pass part=2, 3, ... for the later parts."
-+    ),
-+    "input_schema": {
-+        "type": "object",
-+        "properties": {"part": {"type": "integer", "minimum": 1, "description": "1-based part (default 1, the earliest)."}},
-+        "required": [],
-+    },
-+}
-+
-+
-+@dataclass(frozen=True)
-+class TaskVideo:
-+    """One demonstration video in the store."""
-+
-+    root: Path
-+    index: dict[str, Any]
-+
-+    @property
-+    def video_id(self) -> str:
-+        return str(self.index.get("video_id", self.root.name))
-+
-+    @property
-+    def provenance(self) -> str:
-+        """One line for the prompt: what this video is and where it came from."""
-+        return str(self.index.get("source") or "a recorded demonstration of this task")
-+
-+    @property
-+    def is_full(self) -> bool:
-+        """True for a complete-recording store built by ``video_icl/build_full_videos.py``."""
-+        return self.index.get("kind") == FULL_KIND
-+
-+    @property
-+    def per_part(self) -> int:
-+        return FULL_PER_PART if self.is_full else SHEETS_PER_PART
-+
-+    @property
-+    def n_parts(self) -> int:
-+        sheets = self.index.get("sheets") or []
-+        return max(1, -(-len(sheets) // self.per_part))
-+
-+    def part(self, part: int, *, cross_task: bool = False) -> dict[str, Any]:
-+        """Payload for one page: captions plus the sheet images of that page."""
-+        sheets = list(self.index.get("sheets") or [])
-+        if not sheets:
-+            return {"error": f"video {self.video_id} has no sheets"}
-+        part = max(1, min(int(part), self.n_parts))
-+        start = (part - 1) * self.per_part
-+        page = sheets[start : start + self.per_part]
-+        shown = {i for sheet in page for i in sheet.get("frames", [])}
-+        frames = [f for f in self.index.get("frames", []) if f.get("i") in shown]
-+        images: list[bytes] = []
-+        for sheet in page:
-+            path = self.root / str(sheet.get("file"))
-+            try:
-+                images.append(path.read_bytes())
-+            except OSError as exc:  # missing sheet must not kill the run
-+                logger.warning("task video sheet unreadable: %s (%s)", path, exc)
-+        if self.index.get("minimal"):
-+            # Minimal-description ablation: the images and the paging, nothing else.
-+            return {"part": part, "n_parts": self.n_parts, "_image_series_bytes": images}
-+        if self.is_full:
-+            return self._full_payload(part, page, images, cross_task=cross_task)
-+        payload = {
-+            "video_id": self.video_id,
-+            "demonstrated_task_language": self.index.get("task_language"),
-+            "source": self.index.get("source"),
-+            "caveat": CROSS_TASK_LAYOUT_CAVEAT if cross_task else CAVEAT,
-+            "part": part,
-+            "n_parts": self.n_parts,
-+            "frames_in_this_part": frames,
-+            "total_keyframes": len(self.index.get("frames", [])),
-+            "_image_series_bytes": images,
-+        }
-+        if cross_task:
-+            payload["your_instruction"] = "read task_language from view_env_state; it may differ"
-+            payload["if_they_differ"] = CROSS_TASK_CAVEAT
-+        return payload
-+
-+    def _full_payload(self, part: int, page: list[dict[str, Any]], images: list[bytes], *, cross_task: bool) -> dict[str, Any]:
-+        """One page of the complete recording: which seconds it covers, and its images."""
-+        hz = int(self.index.get("control_hz") or 20)
-+        steps = [int(s) for sheet in page for s in sheet.get("frames", [])]
-+        a, b = (min(steps), max(steps)) if steps else (0, 0)
-+        payload = {
-+            "video_id": self.video_id,
-+            "demonstrated_task_language": self.index.get("task_language"),
-+            "source": self.index.get("source"),
-+            "caveat": CROSS_TASK_LAYOUT_CAVEAT if cross_task else CAVEAT,
-+            "what_this_is": FULL_DESCRIPTION,
-+            "part": part,
-+            "n_parts": self.n_parts,
-+            "steps_in_this_part": [a, b],
-+            "seconds_in_this_part": [round(a / hz, 2), round((b + 1) / hz, 2)],
-+            "total_frames": int(self.index.get("n_steps") or 0),
-+            "control_hz": hz,
-+            "_image_series_bytes": images,
-+        }
-+        if cross_task:
-+            payload["your_instruction"] = "read task_language from view_env_state; it may differ"
-+            payload["if_they_differ"] = CROSS_TASK_CAVEAT
-+        return payload
-+
-+
-+def load_store(root: str | Path | None) -> dict[tuple[str, int], TaskVideo]:
-+    """Index every video under ``root`` by (suite family, task id)."""
-+    if not root:
-+        return {}
-+    base = Path(root).expanduser()
-+    if not base.is_dir():
-+        logger.warning("task video store not found: %s", base)
-+        return {}
-+    store: dict[tuple[str, int], TaskVideo] = {}
-+    for index_path in sorted(base.glob("*/index.json")):
-+        try:
-+            index = json.loads(index_path.read_text())
-+            key = (str(index["suite_family"]), int(index["task_id"]))
-+        except (OSError, ValueError, KeyError) as exc:
-+            logger.warning("skipping malformed task video %s: %s", index_path, exc)
-+            continue
-+        store.setdefault(key, TaskVideo(index_path.parent, index))
-+    return store
-+
-+
-+def suite_family(suite: str) -> str:
-+    """``libero_10_swap`` -> ``libero_10``; the video is per base task, not per regime."""
-+    name = str(suite)
-+    for suffix in ("_task", "_swap", "_lan", "_object"):
-+        if name.endswith(suffix):
-+            return name[: -len(suffix)]
-+    return name
-+
-+
-+def resolve(root: str | Path | None, suite: str | None, task_id: int | None) -> TaskVideo | None:
-+    """The video for this cell, or None when the store has none."""
-+    if suite is None or task_id is None:
-+        return None
-+    video = load_store(root).get((suite_family(suite), int(task_id)))
-+    if video is None:
-+        logger.warning("no task video for %s task %s under %s", suite, task_id, root)
-+    return video
-+
-+
-+@readonly
-+def view_task_video(part: int = 1, *, video: TaskVideo, cross_task: bool = False) -> dict[str, Any]:
-+    """Tool handler: return one page of the cell's demonstration keyframes."""
-+    return video.part(part, cross_task=cross_task)
 diff --git a/robots/libero/toolkit.py b/robots/libero/toolkit.py
 index b072896b..d3b79221 100644
 --- a/robots/libero/toolkit.py
@@ -1381,184 +989,6 @@ index be1aee18..661018b2 100644
          return blocks
  
  
-diff --git a/tests/unit_tests/robots/libero/test_task_video.py b/tests/unit_tests/robots/libero/test_task_video.py
-new file mode 100644
-index 00000000..197a0179
---- /dev/null
-+++ b/tests/unit_tests/robots/libero/test_task_video.py
-@@ -0,0 +1,172 @@
-+# Copyright 2026 The RPent Authors.
-+#
-+# Licensed under the Apache License, Version 2.0 (the "License");
-+# you may not use this file except in compliance with the License.
-+# You may obtain a copy of the License at
-+#
-+#     https://www.apache.org/licenses/LICENSE-2.0
-+#
-+# Unless required by applicable law or agreed to in writing, software
-+# distributed under the License is distributed on an "AS IS" BASIS,
-+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-+# See the License for the specific language governing permissions and
-+# limitations under the License.
-+
-+"""Contracts for the per-task video memory layer."""
-+
-+from __future__ import annotations
-+
-+import json
-+from pathlib import Path
-+
-+from robots.libero import task_video
-+from robots.libero.prompt_bundle import system_prompt, user_prompt
-+from rpent.robots.prompt_bundle import PromptBundle
-+from rpent.tools.toolkit import ToolResult, _is_readonly
-+
-+PROMPT_VARS = {
-+    "suite": "libero_10_swap",
-+    "task": 4,
-+    "seed": 1,
-+    "memory_suite": "libero_10_swap",
-+    "memory_task": 4,
-+    "recipe_tag": "10_swap_t4_s1",
-+    "mode": "eval",
-+    "memory_profile": "hf",
-+    "memory_dir": "/memory/libero",
-+    "reference_tag": "10_swap_t4_s0",
-+    "memory_inbox": "/memory/libero/_internal/inbox/x",
-+    "session_number": 1,
-+    "session_max": 1,
-+    "output_dir": "/out",
-+    "task_video_id": "libero_10_t4_demo_0",
-+    "task_video_source": "LIBERO-10 human teleoperation demonstration; layout differs",
-+    "task_video_parts": 2,
-+}
-+
-+
-+def _store(tmp_path: Path, n_sheets: int = 6) -> Path:
-+    root = tmp_path / "videos" / "libero_10_t4_demo_0"
-+    root.mkdir(parents=True)
-+    frames = [
-+        {"i": i, "step": i * 10, "t_frac": i / n_sheets, "event": "", "gripper": "open", "eef_xyz": [0.0, 0.0, 0.6]}
-+        for i in range(1, n_sheets + 1)
-+    ]
-+    index = {
-+        "video_id": "libero_10_t4_demo_0",
-+        "suite_family": "libero_10",
-+        "task_id": 4,
-+        "task_language": "put the white mug on the left plate",
-+        "source": "LIBERO-10 human teleoperation demonstration",
-+        "frames": frames,
-+        "sheets": [{"file": f"sheet_{i:02d}.png", "frames": [i]} for i in range(1, n_sheets + 1)],
-+    }
-+    (root / "index.json").write_text(json.dumps(index))
-+    for i in range(1, n_sheets + 1):
-+        (root / f"sheet_{i:02d}.png").write_bytes(f"png-{i}".encode())
-+    return root.parent
-+
-+
-+def test_resolve_matches_every_perturbation_suite_of_the_base_task(tmp_path: Path) -> None:
-+    store = _store(tmp_path)
-+    for suite in ("libero_10", "libero_10_swap", "libero_10_task", "libero_10_lan", "libero_10_object"):
-+        video = task_video.resolve(store, suite, 4)
-+        assert video is not None and video.video_id == "libero_10_t4_demo_0", suite
-+    assert task_video.resolve(store, "libero_10_swap", 7) is None
-+    assert task_video.resolve(None, "libero_10_swap", 4) is None
-+    assert task_video.resolve(tmp_path / "missing", "libero_10_swap", 4) is None
-+
-+
-+def test_parts_page_the_sheets_and_carry_only_their_own_captions(tmp_path: Path) -> None:
-+    video = task_video.resolve(_store(tmp_path, n_sheets=6), "libero_10_swap", 4)
-+    assert video is not None and video.n_parts == 2
-+    first = video.part(1)
-+    assert first["part"] == 1 and first["n_parts"] == 2
-+    assert first["_image_series_bytes"] == [b"png-1", b"png-2", b"png-3", b"png-4"]
-+    assert [f["i"] for f in first["frames_in_this_part"]] == [1, 2, 3, 4]
-+    second = video.part(2)
-+    assert second["_image_series_bytes"] == [b"png-5", b"png-6"]
-+    assert [f["i"] for f in second["frames_in_this_part"]] == [5, 6]
-+    # out-of-range parts clamp instead of erroring mid-run
-+    assert video.part(9)["part"] == 2 and video.part(0)["part"] == 1
-+
-+
-+def test_tool_result_emits_one_image_block_per_sheet(tmp_path: Path) -> None:
-+    video = task_video.resolve(_store(tmp_path, n_sheets=6), "libero_10_swap", 4)
-+    assert video is not None
-+    result = ToolResult(name="view_task_video", result=task_video.view_task_video(1, video=video))
-+    kinds = [block["type"] for block in result.content_blocks]
-+    assert kinds == ["text", "image", "image", "image", "image"]
-+    assert "_image_series_bytes" not in result.content_blocks[0]["text"]
-+    assert "put the white mug on the left plate" in result.content_blocks[0]["text"]
-+    assert _is_readonly(task_video.view_task_video)
-+
-+
-+def test_mismatched_store_never_announces_itself_in_the_prompt(tmp_path: Path) -> None:
-+    """The blind control: nothing the planner sees may identify a swapped demonstration."""
-+    store = _store(tmp_path)
-+    index_path = store / "libero_10_t4_demo_0" / "index.json"
-+    index = json.loads(index_path.read_text())
-+    index["donor_task_id"] = 9  # what make_variants.py records for a swapped video
-+    index_path.write_text(json.dumps(index))
-+    video = task_video.resolve(store, "libero_10_swap", 4)
-+    assert video is not None
-+    payload = video.part(1)
-+    payload.pop("_image_series_bytes")
-+    assert "donor" not in json.dumps(payload) and "mismatch" not in json.dumps(payload).lower()
-+    bundle = PromptBundle(system=system_prompt, user=user_prompt)
-+    text = bundle.render(
-+        "system",
-+        variables={**PROMPT_VARS, "task_video": True, "task_video_source": video.provenance},
-+    )
-+    assert "donor" not in text and "mismatch" not in text.lower()
-+
-+
-+def test_missing_sheet_file_is_skipped_not_fatal(tmp_path: Path) -> None:
-+    store = _store(tmp_path, n_sheets=2)
-+    (store / "libero_10_t4_demo_0" / "sheet_02.png").unlink()
-+    video = task_video.resolve(store, "libero_10_swap", 4)
-+    assert video is not None
-+    assert video.part(1)["_image_series_bytes"] == [b"png-1"]
-+
-+
-+def test_prompt_section_and_step_appear_only_when_a_video_is_bound() -> None:
-+    bundle = PromptBundle(system=system_prompt, user=user_prompt)
-+    with_video = bundle.render("system", variables={**PROMPT_VARS, "task_video": True})
-+    without = bundle.render("system", variables={**PROMPT_VARS, "task_video": False})
-+    assert "TASK VIDEO MEMORY" in with_video and "view_task_video" in with_video
-+    assert "human teleoperation demonstration" in with_video and "2 part(s)" in with_video
-+    assert "TASK VIDEO" not in without and "view_task_video" not in without
-+    # the baseline prompt is untouched: the video build only prepends one step
-+    assert without in with_video or len(with_video) > len(without)
-+    local = bundle.render(
-+        "system", variables={**PROMPT_VARS, "memory_profile": "local", "task_video": True}
-+    )
-+    assert "TASK VIDEO MEMORY" in local and "LOCAL exploration corpus" in local
-+
-+
-+def test_local_profile_prompt_carries_the_cross_task_block_when_flagged():
-+    """The local memory profile has its own prompt assembly; the goal-rewritten warning
-+    must reach the planner there too, not only through the hf profile's assembly."""
-+    from robots.libero.prompt_bundle import system_prompt
-+    from robots.libero.prompts import system as parts
-+
-+    base = {"memory_profile": "local", "task_video": True, "task_video_id": "v", "task_video_source": "s", "task_video_parts": 2}
-+    same = str(system_prompt({**base, "task_video_cross_task": False}))
-+    cross = str(system_prompt({**base, "task_video_cross_task": True}))
-+    assert "THIS SUITE REWRITES GOALS" not in same
-+    assert "THIS SUITE REWRITES GOALS" in cross
-+    assert parts.TASK_VIDEO_CROSS_TASK.strip()[:40] in cross
-+    assert "demonstration of THIS task" not in cross
-+
-+
-+def test_cross_task_payload_never_calls_the_demonstration_the_same_task(tmp_path):
-+    from robots.libero.task_video import TaskVideo
-+
-+    index = {"video_id": "v", "task_language": "orig", "source": "s", "frames": [{"i": 1}], "sheets": [{"file": "sheet_01.png", "frames": [1]}]}
-+    (tmp_path / "sheet_01.png").write_bytes(b"png")
-+    video = TaskVideo(root=tmp_path, index=index)
-+    same, cross = video.part(1), video.part(1, cross_task=True)
-+    assert "SAME task" in same["caveat"] and "if_they_differ" not in same
-+    assert "SAME task" not in cross["caveat"]
-+    assert "ORIGINAL task" in cross["caveat"] and "Never execute the demonstrated goal" in cross["if_they_differ"]
 diff --git a/robots/libero/demo_clip.py b/robots/libero/demo_clip.py
 new file mode 100644
 index 00000000..a75f01db
@@ -1872,3 +1302,449 @@ index 00000000..a75f01db
 +def view_task_map(*, video: Any, cross_task: bool = False) -> dict[str, Any]:
 +    """Tool handler: the demonstration's structure, text only."""
 +    return task_map(video.index, cross_task=cross_task)
+diff --git a/robots/libero/task_video.py b/robots/libero/task_video.py
+new file mode 100644
+index 00000000..7f657953
+--- /dev/null
++++ b/robots/libero/task_video.py
+@@ -0,0 +1,264 @@
++# Copyright 2026 The RPent Authors.
++#
++# Licensed under the Apache License, Version 2.0 (the "License");
++# you may not use this file except in compliance with the License.
++# You may obtain a copy of the License at
++#
++#     https://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++
++"""Per-task video memory: a demonstration of THIS task shown to the planner in-context.
++
++The store is built offline (``video_icl/build_videos.py``) and holds, per video, an
++``index.json`` plus labelled contact sheets. At run time the cell's video is resolved by
++suite family + task id, and ``view_task_video`` returns its keyframes as image blocks so
++the planner can watch the demonstration before planning. It is read-only: it never
++advances the environment and never reveals evaluation-scene coordinates.
++"""
++
++from __future__ import annotations
++
++import json
++from dataclasses import dataclass
++from pathlib import Path
++from typing import Any
++
++from rpent.tools.toolkit import readonly
++from rpent.utils.logging import get_logger
++
++logger = get_logger("libero.task_video")
++
++#: Contact sheets returned by one ``view_task_video`` call.
++SHEETS_PER_PART = 4
++
++#: "full" stores (``video_icl/build_full_videos.py``) hold the complete recording as images of
++#: one second of consecutive frames; this many of them come back per ``view_task_video`` call.
++FULL_KIND = "full_video"
++FULL_PER_PART = 6
++FULL_DESCRIPTION = (
++    "The complete recording of the demonstration: every frame its cameras recorded, in time "
++    "order, at the control rate and the recorded resolution (128 px). Each image is one second "
++    "of consecutive frames, left to right then top to bottom; each frame shows the agentview "
++    "camera above the wrist camera and is stamped with its demonstration step."
++)
++
++CROSS_TASK_CAVEAT = (
++    "The instruction this demonstration was recorded for is stated above as "
++    "'demonstrated_task_language'. YOUR instruction is whatever `task_language` in "
++    "view_env_state says, and it may name a DIFFERENT object or destination: this suite "
++    "rewrites goals. When they differ, take only the TECHNIQUE from the video (approach "
++    "direction, grasp point on that kind of object, carry height, release condition) and "
++    "apply it to YOUR target. Never execute the demonstrated goal."
++)
++
++
++CAVEAT = (
++    "This is a demonstration of the SAME task in a DIFFERENT layout: object positions, "
++    "plate/basket positions and the robot start pose differ from your scene. Take the "
++    "sub-goal order, which object goes where, the grasp point on each object, the "
++    "approach direction, the carry height and the release behaviour. Do NOT reuse any "
++    "coordinate from it — re-localize every entity in your own images."
++)
++
++#: Layout caveat for goal-rewritten suites: the same warning as ``CAVEAT`` without calling
++#: the demonstration "the SAME task", which the cross-task note below contradicts.
++CROSS_TASK_LAYOUT_CAVEAT = CAVEAT.replace(
++    "a demonstration of the SAME task in a DIFFERENT layout",
++    "a demonstration of the ORIGINAL task of this scene (see 'if_they_differ'), in a DIFFERENT layout",
++)
++
++TOOL_SPEC: dict[str, Any] = {
++    "name": "view_task_video",
++    "description": (
++        "Watch the demonstration video of THIS task from the video memory layer. "
++        "Returns labelled keyframes (agentview and wrist, captioned with step, gripper "
++        "state, end-effector xyz and the grasp/release events) as images. Read-only: it "
++        "does not move the robot. Call it before planning; pass part=2, 3, ... for the "
++        "later keyframes of a long demonstration."
++    ),
++    "input_schema": {
++        "type": "object",
++        "properties": {
++            "part": {
++                "type": "integer",
++                "minimum": 1,
++                "description": "1-based page of keyframes (default 1, the earliest).",
++            }
++        },
++        "required": [],
++    },
++}
++
++
++#: ``--task-video-mode full``: the same tool name, describing the complete recording instead
++#: of keyframes.
++TOOL_SPEC_FULL: dict[str, Any] = {
++    "name": "view_task_video",
++    "description": (
++        "Watch the demonstration video of THIS task from the video memory layer: the COMPLETE "
++        "recording, every frame at the control rate, as images of one second of consecutive "
++        "frames each (agentview above wrist, each frame stamped with its step). Read-only: it "
++        "does not move the robot. Call it before planning; pass part=2, 3, ... for the later "
++        "seconds of the demonstration."
++    ),
++    "input_schema": TOOL_SPEC["input_schema"],
++}
++
++
++#: ``--task-video-mode sheets_min | full_min`` (minimal-description ablation, 2026-09-28):
++#: images only; the store (``video_icl/build_plain_videos.py``) carries no text at all.
++TOOL_SPEC_MIN: dict[str, Any] = {
++    "name": "view_task_video",
++    "description": (
++        "Show the demonstration of this task as images. Read-only: it does not move the "
++        "robot. Pass part=2, 3, ... for the later parts."
++    ),
++    "input_schema": {
++        "type": "object",
++        "properties": {"part": {"type": "integer", "minimum": 1, "description": "1-based part (default 1, the earliest)."}},
++        "required": [],
++    },
++}
++
++
++@dataclass(frozen=True)
++class TaskVideo:
++    """One demonstration video in the store."""
++
++    root: Path
++    index: dict[str, Any]
++
++    @property
++    def video_id(self) -> str:
++        return str(self.index.get("video_id", self.root.name))
++
++    @property
++    def provenance(self) -> str:
++        """One line for the prompt: what this video is and where it came from."""
++        return str(self.index.get("source") or "a recorded demonstration of this task")
++
++    @property
++    def is_full(self) -> bool:
++        """True for a complete-recording store built by ``video_icl/build_full_videos.py``."""
++        return self.index.get("kind") == FULL_KIND
++
++    @property
++    def per_part(self) -> int:
++        return FULL_PER_PART if self.is_full else SHEETS_PER_PART
++
++    @property
++    def n_parts(self) -> int:
++        sheets = self.index.get("sheets") or []
++        return max(1, -(-len(sheets) // self.per_part))
++
++    def part(self, part: int, *, cross_task: bool = False) -> dict[str, Any]:
++        """Payload for one page: captions plus the sheet images of that page."""
++        sheets = list(self.index.get("sheets") or [])
++        if not sheets:
++            return {"error": f"video {self.video_id} has no sheets"}
++        part = max(1, min(int(part), self.n_parts))
++        start = (part - 1) * self.per_part
++        page = sheets[start : start + self.per_part]
++        shown = {i for sheet in page for i in sheet.get("frames", [])}
++        frames = [f for f in self.index.get("frames", []) if f.get("i") in shown]
++        images: list[bytes] = []
++        for sheet in page:
++            path = self.root / str(sheet.get("file"))
++            try:
++                images.append(path.read_bytes())
++            except OSError as exc:  # missing sheet must not kill the run
++                logger.warning("task video sheet unreadable: %s (%s)", path, exc)
++        if self.index.get("minimal"):
++            # Minimal-description ablation: the images and the paging, nothing else.
++            return {"part": part, "n_parts": self.n_parts, "_image_series_bytes": images}
++        if self.is_full:
++            return self._full_payload(part, page, images, cross_task=cross_task)
++        payload = {
++            "video_id": self.video_id,
++            "demonstrated_task_language": self.index.get("task_language"),
++            "source": self.index.get("source"),
++            "caveat": CROSS_TASK_LAYOUT_CAVEAT if cross_task else CAVEAT,
++            "part": part,
++            "n_parts": self.n_parts,
++            "frames_in_this_part": frames,
++            "total_keyframes": len(self.index.get("frames", [])),
++            "_image_series_bytes": images,
++        }
++        if cross_task:
++            payload["your_instruction"] = "read task_language from view_env_state; it may differ"
++            payload["if_they_differ"] = CROSS_TASK_CAVEAT
++        return payload
++
++    def _full_payload(self, part: int, page: list[dict[str, Any]], images: list[bytes], *, cross_task: bool) -> dict[str, Any]:
++        """One page of the complete recording: which seconds it covers, and its images."""
++        hz = int(self.index.get("control_hz") or 20)
++        steps = [int(s) for sheet in page for s in sheet.get("frames", [])]
++        a, b = (min(steps), max(steps)) if steps else (0, 0)
++        payload = {
++            "video_id": self.video_id,
++            "demonstrated_task_language": self.index.get("task_language"),
++            "source": self.index.get("source"),
++            "caveat": CROSS_TASK_LAYOUT_CAVEAT if cross_task else CAVEAT,
++            "what_this_is": FULL_DESCRIPTION,
++            "part": part,
++            "n_parts": self.n_parts,
++            "steps_in_this_part": [a, b],
++            "seconds_in_this_part": [round(a / hz, 2), round((b + 1) / hz, 2)],
++            "total_frames": int(self.index.get("n_steps") or 0),
++            "control_hz": hz,
++            "_image_series_bytes": images,
++        }
++        if cross_task:
++            payload["your_instruction"] = "read task_language from view_env_state; it may differ"
++            payload["if_they_differ"] = CROSS_TASK_CAVEAT
++        return payload
++
++
++def load_store(root: str | Path | None) -> dict[tuple[str, int], TaskVideo]:
++    """Index every video under ``root`` by (suite family, task id)."""
++    if not root:
++        return {}
++    base = Path(root).expanduser()
++    if not base.is_dir():
++        logger.warning("task video store not found: %s", base)
++        return {}
++    store: dict[tuple[str, int], TaskVideo] = {}
++    for index_path in sorted(base.glob("*/index.json")):
++        try:
++            index = json.loads(index_path.read_text())
++            key = (str(index["suite_family"]), int(index["task_id"]))
++        except (OSError, ValueError, KeyError) as exc:
++            logger.warning("skipping malformed task video %s: %s", index_path, exc)
++            continue
++        store.setdefault(key, TaskVideo(index_path.parent, index))
++    return store
++
++
++def suite_family(suite: str) -> str:
++    """``libero_10_swap`` -> ``libero_10``; the video is per base task, not per regime."""
++    name = str(suite)
++    for suffix in ("_task", "_swap", "_lan", "_object"):
++        if name.endswith(suffix):
++            return name[: -len(suffix)]
++    return name
++
++
++def resolve(root: str | Path | None, suite: str | None, task_id: int | None) -> TaskVideo | None:
++    """The video for this cell, or None when the store has none."""
++    if suite is None or task_id is None:
++        return None
++    video = load_store(root).get((suite_family(suite), int(task_id)))
++    if video is None:
++        logger.warning("no task video for %s task %s under %s", suite, task_id, root)
++    return video
++
++
++@readonly
++def view_task_video(part: int = 1, *, video: TaskVideo, cross_task: bool = False) -> dict[str, Any]:
++    """Tool handler: return one page of the cell's demonstration keyframes."""
++    return video.part(part, cross_task=cross_task)
+diff --git a/tests/unit_tests/robots/libero/test_task_video.py b/tests/unit_tests/robots/libero/test_task_video.py
+new file mode 100644
+index 00000000..81b1d863
+--- /dev/null
++++ b/tests/unit_tests/robots/libero/test_task_video.py
+@@ -0,0 +1,170 @@
++# Copyright 2026 The RPent Authors.
++#
++# Licensed under the Apache License, Version 2.0 (the "License");
++# you may not use this file except in compliance with the License.
++# You may obtain a copy of the License at
++#
++#     https://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++
++"""Contracts for the per-task video memory layer."""
++
++from __future__ import annotations
++
++import json
++from pathlib import Path
++
++from robots.libero import task_video
++from robots.libero.prompt_bundle import system_prompt, user_prompt
++from rpent.robots.prompt_bundle import PromptBundle
++from rpent.tools.toolkit import ToolResult, _is_readonly
++
++PROMPT_VARS = {
++    "suite": "libero_10_swap",
++    "task": 4,
++    "seed": 1,
++    "recipe_tag": "10_swap_t4_s1",
++    "mode": "eval",
++    "memory_profile": "hf",
++    "memory_dir": "/memory/libero",
++    "reference_tag": "10_swap_t4_s0",
++    "memory_inbox": "/memory/libero/_internal/inbox/x",
++    "session_number": 1,
++    "session_max": 1,
++    "output_dir": "/out",
++    "task_video_id": "libero_10_t4_demo_0",
++    "task_video_source": "LIBERO-10 human teleoperation demonstration; layout differs",
++    "task_video_parts": 2,
++}
++
++
++def _store(tmp_path: Path, n_sheets: int = 6) -> Path:
++    root = tmp_path / "videos" / "libero_10_t4_demo_0"
++    root.mkdir(parents=True)
++    frames = [
++        {"i": i, "step": i * 10, "t_frac": i / n_sheets, "event": "", "gripper": "open", "eef_xyz": [0.0, 0.0, 0.6]}
++        for i in range(1, n_sheets + 1)
++    ]
++    index = {
++        "video_id": "libero_10_t4_demo_0",
++        "suite_family": "libero_10",
++        "task_id": 4,
++        "task_language": "put the white mug on the left plate",
++        "source": "LIBERO-10 human teleoperation demonstration",
++        "frames": frames,
++        "sheets": [{"file": f"sheet_{i:02d}.png", "frames": [i]} for i in range(1, n_sheets + 1)],
++    }
++    (root / "index.json").write_text(json.dumps(index))
++    for i in range(1, n_sheets + 1):
++        (root / f"sheet_{i:02d}.png").write_bytes(f"png-{i}".encode())
++    return root.parent
++
++
++def test_resolve_matches_every_perturbation_suite_of_the_base_task(tmp_path: Path) -> None:
++    store = _store(tmp_path)
++    for suite in ("libero_10", "libero_10_swap", "libero_10_task", "libero_10_lan", "libero_10_object"):
++        video = task_video.resolve(store, suite, 4)
++        assert video is not None and video.video_id == "libero_10_t4_demo_0", suite
++    assert task_video.resolve(store, "libero_10_swap", 7) is None
++    assert task_video.resolve(None, "libero_10_swap", 4) is None
++    assert task_video.resolve(tmp_path / "missing", "libero_10_swap", 4) is None
++
++
++def test_parts_page_the_sheets_and_carry_only_their_own_captions(tmp_path: Path) -> None:
++    video = task_video.resolve(_store(tmp_path, n_sheets=6), "libero_10_swap", 4)
++    assert video is not None and video.n_parts == 2
++    first = video.part(1)
++    assert first["part"] == 1 and first["n_parts"] == 2
++    assert first["_image_series_bytes"] == [b"png-1", b"png-2", b"png-3", b"png-4"]
++    assert [f["i"] for f in first["frames_in_this_part"]] == [1, 2, 3, 4]
++    second = video.part(2)
++    assert second["_image_series_bytes"] == [b"png-5", b"png-6"]
++    assert [f["i"] for f in second["frames_in_this_part"]] == [5, 6]
++    # out-of-range parts clamp instead of erroring mid-run
++    assert video.part(9)["part"] == 2 and video.part(0)["part"] == 1
++
++
++def test_tool_result_emits_one_image_block_per_sheet(tmp_path: Path) -> None:
++    video = task_video.resolve(_store(tmp_path, n_sheets=6), "libero_10_swap", 4)
++    assert video is not None
++    result = ToolResult(name="view_task_video", result=task_video.view_task_video(1, video=video))
++    kinds = [block["type"] for block in result.content_blocks]
++    assert kinds == ["text", "image", "image", "image", "image"]
++    assert "_image_series_bytes" not in result.content_blocks[0]["text"]
++    assert "put the white mug on the left plate" in result.content_blocks[0]["text"]
++    assert _is_readonly(task_video.view_task_video)
++
++
++def test_mismatched_store_never_announces_itself_in_the_prompt(tmp_path: Path) -> None:
++    """The blind control: nothing the planner sees may identify a swapped demonstration."""
++    store = _store(tmp_path)
++    index_path = store / "libero_10_t4_demo_0" / "index.json"
++    index = json.loads(index_path.read_text())
++    index["donor_task_id"] = 9  # what make_variants.py records for a swapped video
++    index_path.write_text(json.dumps(index))
++    video = task_video.resolve(store, "libero_10_swap", 4)
++    assert video is not None
++    payload = video.part(1)
++    payload.pop("_image_series_bytes")
++    assert "donor" not in json.dumps(payload) and "mismatch" not in json.dumps(payload).lower()
++    bundle = PromptBundle(system=system_prompt, user=user_prompt)
++    text = bundle.render(
++        "system",
++        variables={**PROMPT_VARS, "task_video": True, "task_video_source": video.provenance},
++    )
++    assert "donor" not in text and "mismatch" not in text.lower()
++
++
++def test_missing_sheet_file_is_skipped_not_fatal(tmp_path: Path) -> None:
++    store = _store(tmp_path, n_sheets=2)
++    (store / "libero_10_t4_demo_0" / "sheet_02.png").unlink()
++    video = task_video.resolve(store, "libero_10_swap", 4)
++    assert video is not None
++    assert video.part(1)["_image_series_bytes"] == [b"png-1"]
++
++
++def test_prompt_section_and_step_appear_only_when_a_video_is_bound() -> None:
++    bundle = PromptBundle(system=system_prompt, user=user_prompt)
++    with_video = bundle.render("system", variables={**PROMPT_VARS, "task_video": True})
++    without = bundle.render("system", variables={**PROMPT_VARS, "task_video": False})
++    assert "TASK VIDEO MEMORY" in with_video and "view_task_video" in with_video
++    assert "human teleoperation demonstration" in with_video and "2 part(s)" in with_video
++    assert "TASK VIDEO" not in without and "view_task_video" not in without
++    # the baseline prompt is untouched: the video build only prepends one step
++    assert without in with_video or len(with_video) > len(without)
++    local = bundle.render(
++        "system", variables={**PROMPT_VARS, "memory_profile": "local", "task_video": True}
++    )
++    assert "TASK VIDEO MEMORY" in local and "LOCAL exploration corpus" in local
++
++
++def test_local_profile_prompt_carries_the_cross_task_block_when_flagged():
++    """The local memory profile has its own prompt assembly; the goal-rewritten warning
++    must reach the planner there too, not only through the hf profile's assembly."""
++    from robots.libero.prompt_bundle import system_prompt
++    from robots.libero.prompts import system as parts
++
++    base = {"memory_profile": "local", "task_video": True, "task_video_id": "v", "task_video_source": "s", "task_video_parts": 2}
++    same = str(system_prompt({**base, "task_video_cross_task": False}))
++    cross = str(system_prompt({**base, "task_video_cross_task": True}))
++    assert "THIS SUITE REWRITES GOALS" not in same
++    assert "THIS SUITE REWRITES GOALS" in cross
++    assert parts.TASK_VIDEO_CROSS_TASK.strip()[:40] in cross
++    assert "demonstration of THIS task" not in cross
++
++
++def test_cross_task_payload_never_calls_the_demonstration_the_same_task(tmp_path):
++    from robots.libero.task_video import TaskVideo
++
++    index = {"video_id": "v", "task_language": "orig", "source": "s", "frames": [{"i": 1}], "sheets": [{"file": "sheet_01.png", "frames": [1]}]}
++    (tmp_path / "sheet_01.png").write_bytes(b"png")
++    video = TaskVideo(root=tmp_path, index=index)
++    same, cross = video.part(1), video.part(1, cross_task=True)
++    assert "SAME task" in same["caveat"] and "if_they_differ" not in same
++    assert "SAME task" not in cross["caveat"]
++    assert "ORIGINAL task" in cross["caveat"] and "Never execute the demonstrated goal" in cross["if_they_differ"]

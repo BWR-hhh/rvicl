@@ -37,7 +37,7 @@ MEMORY_PROFILE = """Use the LOCAL exploration corpus for this evaluation. Its th
 different jobs; use every layer that is available:
 
 1. GLOBAL: `{{memory_dir}}/global/` — reusable robot/perception/primitive lessons.
-2. SUITE: `{{memory_dir}}/suite/suite_libero10_<regime>_t{{memory_task}}.md` — the
+2. SUITE: `{{memory_dir}}/suite/suite_libero10_<regime>_t{{task}}.md` — the
    task/regime strategy, validated ranges, and failure table.
 3. TASK: `{{memory_dir}}/task_only/{{reference_tag}}.json` plus
    `{{memory_dir}}/task_only/{{reference_tag}}_recipe.jsonl` — the matched successful
@@ -102,9 +102,6 @@ def system_prompt(variables: "Mapping[str, object] | None" = None) -> PromptNode
     # "sheets_min" / "full_min" (ablation): images only, one-paragraph description, no watch step.
     video_min = video and _mode in ("sheets_min", "full_min")
     empty = bool((variables or {}).get("memory_corpus_empty"))
-    # LIBERO-Plus cells: every arm is told what the benchmark perturbs and where its memory
-    # comes from; a video arm is also told the demonstration is of the unperturbed scene.
-    plus = bool((variables or {}).get("libero_plus"))
     # Ablation arm: the behavioural rules of the video prompt, no demonstration at all.
     rules_only = bool((variables or {}).get("task_rules")) and not video
     base_steps = (
@@ -122,7 +119,6 @@ def system_prompt(variables: "Mapping[str, object] | None" = None) -> PromptNode
     steps = (watch, *base_steps) if (video and not video_min) else base_steps
     return {
         "ROLE AND EVALUATION": base.ROLE_AND_EVALUATION,
-        **({"LIBERO-PLUS EPISODE": base.LIBERO_PLUS_EPISODE} if plus else {}),
         **(
             {
                 (
@@ -147,7 +143,6 @@ def system_prompt(variables: "Mapping[str, object] | None" = None) -> PromptNode
                     )
                 )
                 + ("\n\n" + base.TASK_VIDEO_CROSS_TASK if cross_task else "")
-                + ("\n\n" + base.TASK_VIDEO_PLUS if plus else "")
             }
             if (video and not video_min)
             else {}

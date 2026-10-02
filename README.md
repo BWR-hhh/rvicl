@@ -58,10 +58,14 @@ liberopro-download-assets --skip-existing
 Tested with `rpent-liberopro 0.2.0`, `robosuite 1.5.2`, `mujoco 3.3.0`, `torch 2.7.1+cu128`,
 `openai-codex 0.154.0`. Without `--task-video-dir` the patched RPent behaves exactly like upstream.
 
-**2. Checkpoints and keys.** Pi0.5 (`RLinf/RLinf-Pi05-LIBERO-130-fullshot-SFT`) and SAM 3 as in the
-RPent README; export `PI05_CHECKPOINT_PATH`, `SAM3_CHECKPOINT_PATH` and `LIBERO_TYPE=pro`. The
-planner is `gpt-6-astra` through the Codex SDK: set `OPENAI_API_KEY` / `CODEX_API_KEY` (and the base
-URLs if you use a relay). Copy `.env.example` to `.env` and source it.
+**2. Checkpoints and the planner API.** Pi0.5 (`RLinf/RLinf-Pi05-LIBERO-130-fullshot-SFT`) and
+SAM 3 as in the RPent README; export `PI05_CHECKPOINT_PATH`, `SAM3_CHECKPOINT_PATH` and
+`LIBERO_TYPE=pro`. The planner is reached through your own API credentials: copy `.env.example`
+to `.env`, fill in the key and, if you use a relay or a self-hosted gateway, the base URL, and
+source it. The pipeline was run with `--planner codex --model gpt-6-astra --reasoning-effort low`
+(OpenAI Codex SDK); any OpenAI-compatible endpoint that serves the model works, and RPent's other
+planner backends (`api`, `claude_code`) can be selected with `RVICL_PLANNER` / `RVICL_MODEL` for
+`run_cell.sh` or `--planner` / `--model` for `run_sweep.py`.
 
 **3. Task files.** Three LIBERO-PRO tasks need replacement task files; install them once inside the
 RPent environment:
