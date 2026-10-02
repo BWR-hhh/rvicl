@@ -25,7 +25,7 @@ scripts/run_cell.sh          run one cell
 scripts/run_sweep.py         run many cells with resume, retries and scoring from the simulator
 scripts/check_final_prompts.py   prompt hash check
 video_store/                 build the per-task video store from the LIBERO demonstrations
-benchmark_patches/           fix for three LIBERO-PRO tasks that ship with malformed BDDL goals
+benchmark_patches/           task files for three LIBERO-PRO tasks, installed by benchmark_patches/install.py
 ```
 
 ## Setup
@@ -55,25 +55,18 @@ liberopro-download-assets --skip-existing
 ```
 
 Tested with `rpent-liberopro 0.2.0`, `robosuite 1.5.2`, `mujoco 3.3.0`, `torch 2.7.1+cu128`,
-`openai-codex 0.154.0`. The patch adds `robots/libero/task_video.py` and `demo_clip.py` (the three
-tools), the prompt sections and the CLI flags `--task-video-dir`, `--task-video-mode`,
-`--task-video-cross-task`, and touches two core files: `rpent/tools/toolkit.py` (a tool result may
-carry an ordered series of images) and `rpent/planner/codex.py` (a provider error the SDK retries
-by itself no longer invalidates the cell). Without `--task-video-dir` the patched RPent behaves
-exactly like upstream.
+`openai-codex 0.154.0`. Without `--task-video-dir` the patched RPent behaves exactly like upstream.
 
 **2. Checkpoints and keys.** Pi0.5 (`RLinf/RLinf-Pi05-LIBERO-130-fullshot-SFT`) and SAM 3 as in the
 RPent README; export `PI05_CHECKPOINT_PATH`, `SAM3_CHECKPOINT_PATH` and `LIBERO_TYPE=pro`. The
 planner is `gpt-6-astra` through the Codex SDK: set `OPENAI_API_KEY` / `CODEX_API_KEY` (and the base
 URLs if you use a relay). Copy `.env.example` to `.env` and source it.
 
-**3. Three malformed LIBERO-PRO tasks.** `libero_10_task` t2 and `libero_spatial_task` t3/t7 ship
-with unbalanced `(:goal ...)` expressions and empty layout files, so they cannot be built. Apply the
-fix once inside the RPent environment (see [benchmark_patches/README.md](benchmark_patches/README.md)):
+**3. Task files.** Three LIBERO-PRO tasks need replacement task files; install them once inside the
+RPent environment:
 
 ```bash
-python benchmark_patches/patch_liberopro_tasks.py fix
-python benchmark_patches/patch_liberopro_tasks.py layouts
+python benchmark_patches/install.py
 ```
 
 **4. The video store.** Unpack the released `task_videos_libero.tar.gz` into `workspace/task_videos/`,
