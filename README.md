@@ -4,13 +4,13 @@ A runnable pipeline for **RV-ICL** ("Look Only as Needed: Recursive Video In-Con
 LLM Robot Agents") on LIBERO-PRO, built on [RPent / HarnessVLA](https://github.com/RLinf/RPent).
 
 ```
-LIBERO demonstration (demo_0)        RPent run (one cell = suite, task, seed)
------------------------------        ----------------------------------------
-video_store/build_*.py               --task-video-dir <store> --task-video-mode both
-  -> task_videos/<video_id>/           -> prompt section TASK VIDEO (system.py: TASK_VIDEO_BOTH)
-       index.json  (phases, moments)   -> tools: view_task_video   (16 keyframes, paged)
-       sheet_*.png (keyframes)                  view_task_map     (goal, phases, moments as text)
-       agentview.npy, wrist.npy                 view_demo_clip    (~20 recorded frames of one phase/moment)
+video store (released archive)       RPent run (one cell = suite, task, seed)
+------------------------------       ----------------------------------------
+task_videos/<video_id>/              --task-video-dir <store> --task-video-mode both
+  index.json  (phases, moments)        -> prompt section TASK VIDEO (system.py: TASK_VIDEO_BOTH)
+  sheet_*.png (keyframes)              -> tools: view_task_video   (16 keyframes, paged)
+  agentview.npy, wrist.npy                      view_task_map     (goal, phases, moments as text)
+                                                view_demo_clip    (~20 recorded frames of one phase/moment)
 ```
 
 ## What is in this repository
@@ -24,7 +24,6 @@ scripts/start_services.sh    start the shared Pi0.5 and SAM 3 servers
 scripts/run_cell.sh          run one cell
 scripts/run_sweep.py         run many cells with resume, retries and scoring from the simulator
 scripts/check_final_prompts.py   prompt hash check
-video_store/                 build the per-task video store from the LIBERO demonstrations
 benchmark_patches/           task files for three LIBERO-PRO tasks, installed by benchmark_patches/install.py
 ```
 
@@ -69,10 +68,8 @@ RPent environment:
 python benchmark_patches/install.py
 ```
 
-**4. The video store.** Unpack the released `task_videos_libero.tar.gz` into `workspace/task_videos/`,
-or rebuild it from the original LIBERO demonstrations ([video_store/README.md](video_store/README.md)).
-Each of the 40 base tasks (`libero_spatial`, `libero_object`, `libero_goal`, `libero_10` x 10) gets
-one directory with `index.json`, eight contact sheets and the recorded frames for clips.
+**4. The video store.** Unpack the released `task_videos_libero.tar.gz` into `workspace/task_videos/`
+(one directory per base task, 40 in all), or point `RVICL_VIDEO_STORE` at wherever you put it.
 
 **5. Services.** One Pi0.5 server and one SAM 3 server are shared by every cell:
 
