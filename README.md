@@ -78,8 +78,16 @@ python benchmark_patches/install.py
 python scripts/fetch_memory.py
 ```
 
-**5. The video store.** Unpack the released `task_videos_libero.tar.gz` into `workspace/task_videos/`
-(one directory per base task, 40 in all), or point `RVICL_VIDEO_STORE` at wherever you put it.
+**5. The video store.** Download the archive from the
+[v0.1 release](https://github.com/BWR-hhh/rvicl/releases/tag/v0.1) and unpack it in the workspace
+(one directory per base task, 40 in all), or point `RVICL_VIDEO_STORE` at wherever you put it:
+
+```bash
+cd <workspace>
+curl -LO https://github.com/BWR-hhh/rvicl/releases/download/v0.1/task_videos_libero.tar.gz
+curl -LO https://github.com/BWR-hhh/rvicl/releases/download/v0.1/task_videos_libero.tar.gz.sha256
+sha256sum -c task_videos_libero.tar.gz.sha256 && tar -xzf task_videos_libero.tar.gz   # -> task_videos/
+```
 
 **6. Services.** One Pi0.5 server and one SAM 3 server are shared by every cell:
 
