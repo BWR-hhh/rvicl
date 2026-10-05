@@ -3,6 +3,8 @@
 A runnable pipeline for **RV-ICL** ("Look Only as Needed: Recursive Video In-Context Learning for
 LLM Robot Agents") on LIBERO-PRO, built on [RPent / HarnessVLA](https://github.com/RLinf/RPent).
 
+**[Project page](https://bwr-hhh.github.io/rvicl/)** with a replay of one episode, the demonstration hierarchy and the results.
+
 ## What is in this repository
 
 ```
