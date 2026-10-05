@@ -1,0 +1,890 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="RV-ICL gives an LLM robot agent one demonstration video as a hierarchy it navigates: coarse levels before planning, one clip at a time during execution. 96.5% on LIBERO-PRO, 95.8% on LIBERO-Plus.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Recursive Video In-Context Learning for Agentic Robot">
+<meta property="og:description" content="RV-ICL gives an LLM robot agent one demonstration video as a hierarchy it navigates: coarse levels before planning, one clip at a time during execution. 96.5% on LIBERO-PRO, 95.8% on LIBERO-Plus.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230E1422'/%3E%3Crect x='10' y='10' width='12' height='12' transform='rotate(45 16 16)' fill='%23EB6834'/%3E%3C/svg%3E">
+<style>
+:root { color-scheme: light; padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px); }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+</style>
+<title>Recursive Video In-Context Learning for Agentic Robot</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=JetBrains+Mono:wght@400;500;700&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&display=swap">
+<style>
+/* Layout: a viewing desk. One dark replay stage carries the page; around it a single reading column
+   that widens into full-width plates for the interactive pieces. */
+:root {
+  --bg: #F2F4F8; --surface: #FFFFFF; --sunk: #E8ECF3; --plate: #FFFFFF;
+  --ink: #0E1626; --ink-2: #465068; --ink-3: #6F7A93; --line: #D8DEE9;
+  --shadow: 0 1px 2px rgba(14,22,38,.05), 0 14px 34px -18px rgba(14,22,38,.22); --gutter: clamp(16px, 4vw, 40px); --gap: clamp(56px, 8vw, 96px);
+  --look: #EB6834; --look-ink: #B1420F; --look-wash: #FCEADF;
+  --coarse: #2A78D6; --coarse-ink: #1C5CAB; --coarse-wash: #E2EDFB;
+  --ok: #16885C; --ok-wash: #DCF2E9; --deemph: #7F8AA1;
+  --stage: #0E1422; --stage-2: #18203A; --stage-ink: #EEF2F9; --stage-ink-2: #A3AEC6; --stage-line: #2B3654; --stage-move: #46557A;
+  --display: "Archivo", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0B101B; --surface: #141B2B; --sunk: #0F1524; --plate: #EEF0F4;
+    --ink: #EDF1F8; --ink-2: #B3BDD1; --ink-3: #8794AE; --line: #262F46;
+    --look: #E66A35; --look-ink: #FFA273; --look-wash: #3A2116;
+    --coarse: #3987E5; --coarse-ink: #86B6EF; --coarse-wash: #14294A;
+    --ok: #2DB383; --ok-wash: #12302A; --deemph: #7A88A4;
+    --stage: #131A2B; --stage-2: #1C2540; --stage-ink: #EEF2F9; --stage-ink-2: #A3AEC6; --stage-line: #2F3B5C; --stage-move: #4C5C84;
+    --shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 20px 44px -24px rgba(0,0,0,.75); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0B101B; --surface: #141B2B; --sunk: #0F1524; --plate: #EEF0F4;
+  --ink: #EDF1F8; --ink-2: #B3BDD1; --ink-3: #8794AE; --line: #262F46;
+  --look: #E66A35; --look-ink: #FFA273; --look-wash: #3A2116;
+  --coarse: #3987E5; --coarse-ink: #86B6EF; --coarse-wash: #14294A;
+  --ok: #2DB383; --ok-wash: #12302A; --deemph: #7A88A4;
+  --stage: #131A2B; --stage-2: #1C2540; --stage-ink: #EEF2F9; --stage-ink-2: #A3AEC6; --stage-line: #2F3B5C; --stage-move: #4C5C84;
+  --shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 20px 44px -24px rgba(0,0,0,.75); color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 17px; line-height: 1.55; }
+.page { max-width: 1120px; margin-inline: auto; padding-inline: var(--gutter); padding-block: 0 72px; display: flex; flex-direction: column; gap: var(--gap); }
+.sec, .stage { scroll-margin-top: 76px; }
+a { color: var(--coarse-ink); text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--look); outline-offset: 2px; border-radius: 4px; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; }
+p { margin: 0; }
+.mono { font-family: var(--mono); font-size: 0.82em; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
+.read { max-width: 68ch; display: flex; flex-direction: column; gap: 14px; }
+.read p { color: var(--ink-2); }
+.sec { display: flex; flex-direction: column; gap: 28px; }
+.sec > header { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 10px clamp(24px, 4vw, 56px); align-items: start; }
+.sec > header .eyebrow { grid-column: 1 / -1; }
+.sec > header h2 { grid-column: 1; }
+.sec > header > p { grid-column: 2; }
+.sec > header h2:last-child { grid-column: 1 / -1; }
+.sec h2 { font-stretch: 104%; font-weight: 700; font-size: clamp(1.2rem, 2vw, 1.5rem); line-height: 1.25; }
+.sec > header p { color: var(--ink); }
+.sec > header .eyebrow { display: flex; align-items: center; gap: 10px; }
+.sec > header .eyebrow::before { content: ""; width: 7px; height: 7px; background: var(--ink-3); transform: rotate(45deg); flex: none; }
+
+/* top bar and hero */
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 6; display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-inline: calc(-1 * var(--gutter)); padding: 12px var(--gutter) 18px; background: color-mix(in srgb, var(--bg) 86%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.top::after { content: ""; position: absolute; left: var(--gutter); right: var(--gutter); bottom: 0; height: 7px; pointer-events: none; background: linear-gradient(var(--line), var(--line)) left bottom / 100% 1px no-repeat, repeating-linear-gradient(to right, var(--line) 0 1px, transparent 1px 60px) left bottom / 100% 7px no-repeat, repeating-linear-gradient(to right, var(--line) 0 1px, transparent 1px 12px) left bottom / 100% 4px no-repeat; }
+.mark { font-family: var(--display); font-stretch: 125%; font-weight: 800; font-size: 15px; letter-spacing: 0.04em; white-space: nowrap; flex: none; }
+.top nav { display: flex; gap: 2px; font-size: 14px; min-width: 0; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+.top nav a { color: var(--ink-2); text-decoration: none; padding: 5px 11px; border-radius: 999px; }
+.top nav a:hover { color: var(--ink); }
+.top nav a.on { color: var(--ink); background: var(--surface); box-shadow: 0 0 0 1px var(--line); }
+.hero { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: clamp(26px, 4vw, 44px) clamp(24px, 5vw, 64px); align-items: start; margin-top: calc(clamp(22px, 3.5vw, 44px) - var(--gap)); }
+.hero-head { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 16px; min-width: 0; overflow-x: clip; }
+.glance { grid-column: 1 / -1; margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-block: 1px solid var(--line); }
+.glance div { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 16px; align-items: center; padding: 16px 20px 16px 0; }
+.glance div + div { border-left: 1px solid var(--line); padding-left: 20px; }
+.glance dt { font: 700 clamp(1.7rem, 3.1vw, 2.25rem)/1 var(--body); letter-spacing: -0.02em; }
+.glance dd { margin: 0; color: var(--ink-2); font-size: 15px; line-height: 1.4; }
+.glance dd b { color: var(--ink); font-weight: 600; }
+.reel { grid-column: 1 / -1; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.reel-strip { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 4px; padding: 6px; background: var(--stage); border-radius: 12px; box-shadow: var(--shadow); }
+.reel-strip .kf { border-radius: 3px; opacity: .38; filter: grayscale(1); }
+.reel-strip .kf.lit { opacity: 1; filter: none; box-shadow: 0 0 0 2px var(--look); }
+.reel figcaption { display: flex; flex-wrap: wrap; gap: 4px 24px; justify-content: space-between; font-size: 14px; color: var(--ink-3); }
+.reel figcaption span:last-child::before { content: ""; display: inline-block; width: 9px; height: 9px; margin-right: 8px; border-radius: 2px; box-shadow: 0 0 0 2px var(--look); vertical-align: 0; }
+@keyframes lit { 0% { box-shadow: 0 0 0 2px var(--look), 0 0 0 0 color-mix(in srgb, var(--look) 70%, transparent); } 100% { box-shadow: 0 0 0 2px var(--look), 0 0 0 12px transparent; } }
+@keyframes pulse { from { transform: scale(.92); opacity: .85; } to { transform: scale(1.4); opacity: 0; } }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } .reel-strip .kf.lit { animation: lit 1.4s ease-out 2; } .bigplay::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 2px solid var(--look); animation: pulse 2.2s ease-out infinite; } }
+.hero h1 { font-stretch: 88%; font-weight: 800; font-size: clamp(1.45rem, 3.4vw, 2.45rem); line-height: 1.08; letter-spacing: -0.015em; white-space: nowrap; }
+.hero h1 em { font-style: normal; color: var(--look); }
+.authors { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.authors p { display: flex; flex-wrap: wrap; }
+.names { gap: 4px 28px; font-family: var(--display); font-weight: 600; font-size: clamp(1rem, 1.7vw, 1.2rem); color: var(--ink); }
+.affil { gap: 2px 22px; font-size: 14.5px; color: var(--ink-2); }
+.authors sup { font-size: 0.68em; line-height: 0; margin-inline: 1px; color: var(--ink-3); }
+.hero .lede { max-width: 62ch; min-width: 0; font-size: clamp(1.05rem, 1.6vw, 1.2rem); color: var(--ink); }
+.facts { display: flex; flex-direction: column; gap: 6px 22px; min-width: 0; font-size: 15px; color: var(--ink-2); padding: 0; margin: 0; list-style: none; }
+.facts li { display: flex; gap: 8px; align-items: center; }
+.facts li::before { content: ""; width: 7px; height: 7px; background: var(--ink-3); transform: rotate(45deg); flex: none; }
+
+/* replay stage */
+.stage { background: radial-gradient(900px 380px at 10% -10%, color-mix(in srgb, var(--coarse) 22%, transparent), transparent 70%), var(--stage); color: var(--stage-ink); border-radius: 20px; padding: clamp(14px, 2.4vw, 26px); display: flex; flex-direction: column; gap: 16px; box-shadow: var(--shadow); }
+.stage-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 20px; align-items: baseline; }
+.stage-title { font-family: var(--display); font-stretch: 104%; font-weight: 600; font-size: clamp(1.02rem, 1.8vw, 1.25rem); }
+.stage-head .task { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--stage-ink-2); }
+.stage-grid { display: grid; grid-template-columns: minmax(0, 0.82fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.mon { background: var(--stage-2); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 10px; min-width: 0; margin: 0; }
+.mon-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--stage-ink-2); }
+.mon-head b { color: var(--stage-ink); font-weight: 500; }
+.screen { position: relative; border-radius: 8px; overflow: hidden; background: #05070C; }
+.screen video, .screen img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.screen.sq { aspect-ratio: 1 / 1; }
+.screen.wide { aspect-ratio: 2 / 1; }
+.bigplay { position: absolute; inset: 0; margin: auto; width: 76px; height: 76px; border-radius: 50%; border: 0; background: var(--look); color: #fff; cursor: pointer; display: grid; place-items: center; box-shadow: 0 6px 28px rgba(0,0,0,.45); }
+.bigplay svg { width: 30px; height: 30px; margin-left: 4px; }
+.now { font-size: 15px; color: var(--stage-ink-2); min-height: 3.1em; }
+.now code { font-family: var(--mono); font-size: 13px; color: var(--stage-ink); }
+.demo[data-state="idle"] .screen > video, .demo[data-state="idle"] .kfgrid { opacity: 0.16; filter: grayscale(1); }
+.demo .screen > video, .demo .kfgrid { transition: opacity .35s, filter .35s; }
+.idle-note { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 16px; color: var(--stage-ink-2); font-size: 15px; }
+.demo:not([data-state="idle"]) .idle-note { display: none; }
+.demo[data-state="look"] { box-shadow: 0 0 0 2px var(--look); }
+.viewtags { position: absolute; left: 0; right: 0; top: 0; display: grid; grid-template-columns: 1fr 1fr; pointer-events: none; }
+.viewtags span { justify-self: start; margin: 6px; padding: 1px 6px; font-family: var(--mono); font-size: 10.5px; background: rgba(5,7,12,.7); color: #EEF2F9; border-radius: 3px; }
+.coarse-view { position: absolute; inset: 0; display: flex; flex-direction: column; background: #05070C; }
+.kfgrid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; padding: 2px; }
+.kf { aspect-ratio: 256 / 248; background-image: url("assets/keyframes.jpg"); background-size: 400% 400%; border-radius: 2px; }
+.mapline { flex: 1; min-height: 0; overflow: hidden; margin: 0; padding: 6px 10px; font-family: var(--mono); font-size: clamp(8.5px, 1.05vw, 11.5px); line-height: 1.5; color: #C9D3E6; white-space: pre-wrap; }
+.call { font-family: var(--mono); font-size: 13px; color: var(--stage-ink); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-height: 26px; }
+.chip { display: inline-block; font-family: var(--mono); font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 4px; line-height: 1.5; }
+.chip.l0 { background: var(--coarse); color: #fff; }
+.chip.l12 { background: #6B768F; color: #fff; }
+.chip.l3 { background: var(--look); color: #fff; }
+.chip.ok { background: var(--ok); color: #fff; }
+.again { font-family: var(--body); font-size: 13px; color: var(--stage-ink-2); }
+.quote { margin: 0; padding-left: 12px; border-left: 2px solid var(--stage-line); color: var(--stage-ink-2); font-size: 15px; min-height: 3.1em; }
+.demo[data-state="look"] .quote { border-left-color: var(--look); color: var(--stage-ink); }
+.lookbar { height: 3px; background: var(--stage-line); border-radius: 2px; overflow: hidden; }
+.lookbar i { display: block; height: 100%; width: 0; background: var(--look); }
+/* timeline */
+.tl-wrap { display: flex; flex-direction: column; gap: 6px; }
+.tl { position: relative; height: 46px; cursor: pointer; touch-action: none; }
+.tl-track { position: absolute; left: 0; right: 0; bottom: 4px; height: 16px; border-radius: 4px; background: var(--stage-2); overflow: hidden; }
+.tl-seg { position: absolute; top: 0; bottom: 0; border-right: 2px solid var(--stage); }
+.tl-seg.move { background: var(--stage-move); }
+.tl-seg.vla { background: var(--coarse); }
+.tl-mk { position: absolute; top: 2px; width: 26px; height: 26px; margin-left: -13px; border: 0; background: none; padding: 0; cursor: pointer; display: grid; place-items: start center; }
+.tl-mk::before { content: ""; width: 11px; height: 11px; margin-top: 3px; background: var(--look); transform: rotate(45deg); border: 2px solid var(--stage); }
+.tl-mk.coarse::before { background: var(--coarse); }
+.tl-mk.done::before { opacity: .45; }
+.tl-mk::after { content: ""; position: absolute; top: 18px; bottom: -14px; width: 1px; background: var(--look); opacity: .6; }
+.tl-mk.coarse::after { background: var(--coarse); }
+.tl-head { position: absolute; top: 14px; bottom: 0; width: 2px; margin-left: -1px; background: #fff; border-radius: 1px; pointer-events: none; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; font-size: 14px; color: var(--stage-ink-2); }
+.btn { font: 600 14px var(--body); border-radius: 8px; border: 1px solid var(--stage-line); background: var(--stage-2); color: var(--stage-ink); padding: 7px 14px; cursor: pointer; min-width: 104px; }
+.btn:hover { border-color: var(--stage-ink-2); }
+.btn.primary { background: var(--look); border-color: var(--look); color: #fff; }
+.btn.primary:hover { filter: brightness(1.08); }
+.controls label { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+.controls input { accent-color: var(--look); width: 16px; height: 16px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-left: auto; font-size: 13px; }
+.legend span { display: inline-flex; gap: 6px; align-items: center; }
+.sw { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+.sw.di { transform: rotate(45deg); border-radius: 1px; width: 9px; height: 9px; }
+.stage-note { font-size: 13.5px; color: var(--stage-ink-2); }
+
+/* why */
+.why { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border-top: 1px solid var(--line); }
+.why > div { padding: 20px 20px 4px 0; display: flex; flex-direction: column; gap: 6px; }
+.glyph { display: grid; grid-template-columns: repeat(32, minmax(0, 1fr)); gap: 2px; height: 20px; margin-bottom: 8px; }
+.glyph i { display: block; border-radius: 1.5px; background: var(--line); }
+.glyph i.on { background: var(--ink-3); }
+.glyph i.miss { background: transparent; box-shadow: inset 0 0 0 1.5px var(--look); }
+.glyph i.plan { background: var(--coarse); }
+.glyph i.hit { background: var(--look); }
+.why > div + div { border-left: 1px solid var(--line); padding-left: 20px; }
+.why h3 { font-stretch: 112%; font-weight: 700; font-size: 1.05rem; }
+.why p { color: var(--ink-2); font-size: 16px; }
+.pull { font-family: var(--display); font-stretch: 102%; font-weight: 600; font-size: clamp(1.1rem, 1.9vw, 1.3rem); line-height: 1.3; }
+
+/* hierarchy explorer */
+.ex { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); padding: clamp(14px, 2.2vw, 24px); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: clamp(16px, 2.5vw, 28px); }
+.ex-player { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ex-player .screen { border-radius: 10px; }
+.ex-label { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 15px; color: var(--ink-2); min-height: 28px; }
+.ex-label b { color: var(--ink); font-weight: 600; }
+.pbtn { font: 600 13px var(--body); border-radius: 7px; border: 1px solid var(--line); background: var(--sunk); color: var(--ink); padding: 5px 12px; cursor: pointer; }
+.ex-levels { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.lv { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.lv-h { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.lv-h strong { font-family: var(--display); font-stretch: 108%; font-weight: 700; font-size: 1rem; }
+.lv-h span.d { color: var(--ink-3); font-size: 14.5px; }
+.kfstrip { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; }
+.kfb { border: 0; padding: 0; background: none; cursor: pointer; border-radius: 4px; overflow: hidden; outline-offset: 1px; }
+.kfb .kf { border-radius: 4px; }
+.kfb[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--coarse); }
+.lanes { position: relative; display: flex; flex-direction: column; gap: 5px; padding-block: 2px; }
+.lane { position: relative; height: 16px; background: var(--sunk); border-radius: 4px; }
+.lane.tall { height: 30px; }
+.lane .ph { position: absolute; top: 0; bottom: 0; border-radius: 3px; border-right: 2px solid var(--surface); background: color-mix(in srgb, var(--ink-3) 46%, var(--sunk)); }
+.lane .ph.closed { background: color-mix(in srgb, var(--ink-2) 72%, var(--sunk)); }
+.lane .ph.on, .lane .mo.on { background: var(--look); }
+.lane .mo { position: absolute; height: 12px; border-radius: 3px; background: color-mix(in srgb, var(--look) 36%, var(--sunk)); }
+.lane .tick { position: absolute; top: 2px; bottom: 2px; width: 2px; margin-left: -1px; background: var(--coarse); border-radius: 1px; }
+.lanes .head { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--ink); pointer-events: none; }
+.opts { display: flex; flex-wrap: wrap; gap: 6px; }
+.opt { font: 500 13.5px var(--body); border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); border-radius: 999px; padding: 4px 11px; cursor: pointer; }
+.opt:hover { border-color: var(--ink-3); color: var(--ink); }
+.opt[aria-pressed="true"] { background: var(--look-wash); border-color: var(--look); color: var(--look-ink); }
+.maptext { margin: 0; background: var(--sunk); border-radius: 8px; padding: 12px 14px; font-family: var(--mono); font-size: 11.5px; line-height: 1.65; color: var(--ink-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* access */
+.steps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 10px; box-shadow: var(--shadow); }
+.lvrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.when { font-family: var(--mono); font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); margin-left: 4px; }
+.step h3 { font-stretch: 110%; font-weight: 700; font-size: 1.1rem; }
+.step p { color: var(--ink-2); font-size: 16px; }
+.tools { display: flex; flex-wrap: wrap; gap: 6px; }
+.step code { font-family: var(--mono); font-size: 12.5px; background: var(--sunk); padding: 1px 5px; border-radius: 4px; color: var(--ink); }
+.figure { margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.figure .plate { background: var(--plate); border: 1px solid var(--line); border-radius: 14px; padding: clamp(8px, 1.6vw, 18px); overflow-x: auto; }
+.figure img { display: block; width: 100%; min-width: 620px; height: auto; }
+.figure figcaption { color: var(--ink-3); font-size: 14.5px; }
+
+/* results */
+.ladder { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr); gap: 12px; align-items: stretch; }
+.rung { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 16px 18px; display: flex; flex-direction: column; gap: 4px; }
+.rung.us { border-color: var(--look); background: var(--look-wash); }
+.rung .v { font-family: var(--body); font-weight: 700; font-size: clamp(1.9rem, 4.6vw, 3rem); line-height: 1; letter-spacing: -0.02em; }
+.rung .n { font-weight: 600; }
+.rung .d { color: var(--ink-2); font-size: 14.5px; }
+.arrow { align-self: center; color: var(--ink-3); font-family: var(--mono); font-size: 13px; text-align: center; white-space: nowrap; }
+.arrow b { display: block; color: var(--ink); font-size: 15px; }
+.charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 18px 20px 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.card.full { grid-column: 1 / -1; }
+.card h3 { font-stretch: 108%; font-weight: 700; font-size: 1.08rem; }
+.card .cap { color: var(--ink-2); font-size: 15px; }
+.key { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13.5px; color: var(--ink-2); }
+.key span { display: inline-flex; gap: 6px; align-items: center; }
+.key i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.key i.bar { border-radius: 2px; }
+.viz { font-size: 14px; font-variant-numeric: tabular-nums; display: flex; flex-direction: column; gap: 2px; }
+.axis, .row { display: grid; grid-template-columns: 92px minmax(0, 1fr) 96px; gap: 10px; align-items: center; }
+.axis .scale { position: relative; height: 18px; color: var(--ink-3); font-size: 12px; }
+.axis .scale span { position: absolute; transform: translateX(-50%); }
+.row { border-radius: 6px; padding-block: 3px; }
+.row:hover, .row:focus-visible { background: var(--sunk); }
+.row .lab { color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row.em .lab { color: var(--ink); font-weight: 600; }
+.row .val { color: var(--ink); font-weight: 600; text-align: left; white-space: nowrap; }
+.row .val small { color: var(--ink-3); font-weight: 400; font-size: 12.5px; }
+.track { position: relative; height: 22px; background-image: linear-gradient(to right, var(--line) 1px, transparent 1px); background-size: 25% 100%; border-right: 1px solid var(--line); }
+.track .ln { position: absolute; top: 50%; height: 2px; margin-top: -1px; background: var(--deemph); opacity: .55; }
+.track .dot { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; box-shadow: 0 0 0 2px var(--surface); }
+.row:hover .track .dot, .row:focus-visible .track .dot { box-shadow: 0 0 0 2px var(--sunk); }
+.dot.a { background: var(--deemph); }
+.dot.b { background: var(--look); }
+.track.bars { background-size: 25% 100%; height: 20px; }
+.track .bar { position: absolute; left: 0; top: 3px; bottom: 3px; border-radius: 0 4px 4px 0; background: var(--deemph); }
+.row.em .bar { background: var(--look); }
+.bar.one { background: var(--coarse) !important; }
+.duo { display: flex; flex-direction: column; gap: 14px; }
+.duo h4 { margin: 0 0 4px; font: 600 14px var(--body); color: var(--ink-2); }
+.split { display: flex; height: 22px; gap: 2px; border-radius: 4px; overflow: hidden; }
+.split i { display: block; height: 100%; }
+.split i:first-child { background: var(--coarse); }
+.split i:last-child { background: color-mix(in srgb, var(--coarse) 45%, var(--sunk)); }
+.splitkey { display: grid; grid-template-columns: 68fr 32fr; gap: 2px; font-size: 14px; color: var(--ink-2); }
+.splitkey b { color: var(--ink); }
+details.tbl { font-size: 13.5px; color: var(--ink-2); }
+details.tbl summary { cursor: pointer; color: var(--ink-3); }
+details.tbl .scroll { overflow-x: auto; }
+details.tbl table { border-collapse: collapse; margin-top: 8px; font-variant-numeric: tabular-nums; }
+details.tbl th, details.tbl td { text-align: right; padding: 3px 12px 3px 0; white-space: nowrap; border-bottom: 1px solid var(--line); }
+details.tbl th:first-child, details.tbl td:first-child { text-align: left; }
+#tip { position: fixed; z-index: 10; pointer-events: none; background: var(--ink); color: var(--bg); font-size: 13px; line-height: 1.4; padding: 6px 9px; border-radius: 6px; max-width: 260px; }
+#tip b { font-weight: 700; }
+
+/* episodes */
+.eps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.ep { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.ep video { width: 100%; aspect-ratio: 1 / 1; border-radius: 12px; background: #05070C; display: block; box-shadow: var(--shadow); }
+.ep figcaption { font-size: 14.5px; color: var(--ink-2); display: flex; flex-direction: column; gap: 4px; }
+.ep figcaption em { color: var(--ink); }
+.tag { font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); align-self: flex-start; padding: 2px 9px; border-radius: 999px; background: var(--sunk); }
+
+/* cite */
+.bib { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+.bib pre { margin: 0; padding: 16px 18px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); }
+.bib button { position: absolute; top: 10px; right: 10px; }
+footer { color: var(--ink-3); font-size: 14px; border-top: 1px solid var(--line); padding-top: 18px; display: flex; flex-wrap: wrap; gap: 6px 24px; justify-content: space-between; }
+footer a { color: var(--ink-2); }
+
+@media (max-width: 860px) {
+  .sec > header { grid-template-columns: minmax(0, 1fr); }
+  .sec > header h2, .sec > header > p { grid-column: 1; }
+  .stage-grid, .ex, .steps, .charts, .hero { grid-template-columns: minmax(0, 1fr); }
+  .reel-strip { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+  .why { grid-template-columns: minmax(0, 1fr); }
+  .facts { flex-direction: row; flex-wrap: wrap; }
+  .glance { grid-template-columns: minmax(0, 1fr); }
+  .glance div + div { border-left: 0; padding-left: 0; border-top: 1px solid var(--line); }
+  .why > div + div { border-left: 0; padding-left: 0; border-top: 1px solid var(--line); }
+  .ladder { grid-template-columns: minmax(0, 1fr); }
+  .arrow { text-align: left; }
+  .arrow b { display: inline; margin-right: 8px; }
+  .eps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .legend { margin-left: 0; }
+}
+@media (max-width: 700px) { .hero h1 { white-space: normal; font-size: clamp(1.6rem, 7vw, 2.2rem); } }
+@media (max-width: 520px) {
+  body { font-size: 16px; }
+  .axis, .row { grid-template-columns: 74px minmax(0, 1fr) 82px; gap: 8px; }
+  .kfstrip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .row .lab { white-space: normal; line-height: 1.2; }
+  .bib pre { font-size: 12px; }
+  .stage { border-radius: 14px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="page" id="top">
+
+<div class="top">
+  <span class="mark">RV-ICL</span>
+  <nav aria-label="Sections">
+    <a href="#access">Method</a><a href="#idea">Why</a><a href="#hierarchy">Hierarchy</a><a href="#replay">Replay</a><a href="#results">Results</a><a href="#episodes">Episodes</a>
+  </nav>
+</div>
+
+<section class="hero">
+  <div class="hero-head">
+  <span class="eyebrow">Preprint · 2026</span>
+  <h1><em>Recursive</em> Video In-Context Learning for Agentic Robot</h1>
+  <div class="authors">
+    <p class="names"><span>Wenrui Bao<sup>1</sup></span><span>Xinxin Liu<sup>1</sup></span><span>Bingxin Xu<sup>2</sup></span><span>Yuzhang Shang<sup>1*</sup></span></p>
+    <p class="affil"><span><sup>1</sup>University of Central Florida</span><span><sup>2</sup>University of Southern California</span><span><sup>*</sup>Corresponding author</span></p>
+  </div>
+  </div>
+  <p class="lede">The agent gets one demonstration video. It reads an outline before planning and opens one clip whenever a step needs detail.</p>
+  <ul class="facts"><li>No training</li><li>Frozen VLA</li><li>One demonstration per task</li></ul>
+  <dl class="glance" aria-label="Headline results">
+    <div><dt>96.5%</dt><dd><b>LIBERO-PRO</b><br>+3.9 over RPent</dd></div>
+    <div><dt>95.8%</dt><dd><b>LIBERO-Plus</b><br>up from 86.7%</dd></div>
+    <div><dt>97%</dt><dd><b>Re-entry</b><br>share of episodes</dd></div>
+  </dl>
+  <figure class="reel">
+    <div class="reel-strip" id="reel" aria-hidden="true"></div>
+    <figcaption><span>One demonstration, 16 keyframes</span><span>where the agent opened a clip</span></figcaption>
+  </figure>
+</section>
+
+<section class="sec" id="access">
+  <header>
+    <span class="eyebrow">Method</span>
+    <h2>A demonstration the agent can navigate</h2>
+    <p>Each demonstration is indexed offline at four levels. The agent reads the coarse levels once, then returns for one clip at a time.</p>
+  </header>
+  <figure class="figure">
+    <div class="plate"><img src="assets/architecture.png" alt="Architecture of RV-ICL on RPent: the LLM planner calls demonstration tools that read the hierarchy and robot tools that act on the environment." width="1098" height="462"></div>
+    <figcaption>Architecture of RV-ICL on RPent.</figcaption>
+  </figure>
+  <div class="steps">
+    <div class="step">
+      <div class="lvrow"><span class="chip l0">L0</span><span class="chip l12">L1</span><span class="chip l12">L2</span><span class="when">before the first action</span></div>
+      <h3>Coarse levels before planning</h3>
+      <p>Keyframes and the phase map. No clip yet.</p>
+      <div class="tools"><code>view_task_video</code><code>view_task_map</code></div>
+    </div>
+    <div class="step">
+      <div class="lvrow"><span class="chip l3">L3</span><span class="when">before a contact, or after a failed step</span></div>
+      <h3>Re-entry during execution</h3>
+      <p>One clip of the current sub-goal.</p>
+      <div class="tools"><code>view_demo_clip</code></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="idea">
+  <header>
+    <span class="eyebrow">Why not just show the video</span>
+    <h2>No fixed way of showing a video fits the agent’s context</h2>
+    <p>Text memory can record that a grasp failed. It cannot show how a grasp is done. A video can.</p>
+  </header>
+  <div class="why">
+    <div><div class="glyph" id="g-len" aria-hidden="true"></div><h3>Length</h3><p>Hundreds of frames, re-read at every turn.</p></div>
+    <div><div class="glyph" id="g-res" aria-hidden="true"></div><h3>Resolution</h3><p>A few keyframes skip the frames around each contact.</p></div>
+    <div><div class="glyph" id="g-tim" aria-hidden="true"></div><h3>Timing</h3><p>Structure before acting, contact frames only at that step.</p></div>
+  </div>
+</section>
+
+<section class="sec" id="hierarchy">
+  <header>
+    <span class="eyebrow">The demonstration hierarchy</span>
+    <h2>One demonstration, indexed at four levels</h2>
+    <p>Pick a phase or a moment to see the clip the agent would get.</p>
+  </header>
+  <div class="ex">
+    <div class="ex-player">
+      <div class="screen wide">
+        <video id="exv" src="assets/demo.mp4" muted playsinline preload="auto"></video>
+        <div class="viewtags"><span>third-person</span><span>wrist</span></div>
+      </div>
+      <div class="ex-label"><span class="chip l3" id="ex-chip">L3</span><b id="ex-name">clip of grasp 2</b><span id="ex-range">steps 179–219</span><button class="pbtn" id="ex-play" type="button">Play</button></div>
+      <pre class="maptext" aria-label="The phase map the agent reads">phase 1 [0,62) open: approach
+phase 2 [62,109) closed: opens flat_stove_1
+phase 3 [109,203) open: retreat
+phase 4 [203,262) closed: carries moka_pot_1 into flat_stove_1_burner
+phase 5 [262,272) open: hold
+moments: grasp 1 (62), open flat_stove_1 (100), release 1 (109), grasp 2 (203), release 2 (262), end (271)
+goal: (And (Turnon flat_stove_1) (On moka_pot_1 flat_stove_1_cook_region))</pre>
+    </div>
+    <div class="ex-levels">
+      <div class="lv">
+        <div class="lv-h"><span class="chip l0">L0</span><strong>Keyframes</strong><span class="d">around every grasp and release</span></div>
+        <div class="kfstrip" id="ex-kf"></div>
+      </div>
+      <div class="lv">
+        <div class="lv-h"><span class="chip l12">L1</span><strong>Phases</strong><span class="d">between gripper events, as text</span></div>
+        <div class="lanes" id="ex-lanes">
+          <div class="lane" id="lane-kf" aria-hidden="true"></div>
+          <div class="lane" id="lane-ph" aria-hidden="true"></div>
+          <div class="lane tall" id="lane-mo" aria-hidden="true"></div>
+          <div class="head" id="ex-head" style="left:0%"></div>
+        </div>
+        <div class="opts" id="ex-ph"></div>
+      </div>
+      <div class="lv">
+        <div class="lv-h"><span class="chip l12">L2</span><strong>Moments</strong><span class="d">short windows around each sub-event</span></div>
+        <div class="opts" id="ex-mo"></div>
+      </div>
+      <div class="lv">
+        <div class="lv-h"><span class="chip l3">L3</span><strong>Clips</strong><span class="d">frames of one phase or moment, loaded on demand</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="replay">
+  <header>
+    <span class="eyebrow">The method in action</span>
+    <h2>One recorded episode with the agent’s tool calls</h2>
+    <p>Playback pauses where the agent opened the demonstration. The clip it asked for plays beside the robot.</p>
+  </header>
+  <div class="stage" role="group" aria-label="Synced replay of one episode">
+  <div class="stage-head">
+    <span class="stage-title">“turn on the stove and put the moka pot on it”</span>
+    <span class="task">LIBERO-10 · position swap</span>
+  </div>
+  <div class="stage-grid">
+    <figure class="mon">
+      <div class="mon-head"><b>Robot · evaluation episode</b><span id="rp-step">step 0 / 738</span></div>
+      <div class="screen sq">
+        <video id="ep" src="assets/episode.mp4" poster="assets/episode_poster.jpg" muted playsinline preload="auto"></video>
+        <button class="bigplay" id="rp-big" type="button" aria-label="Play the episode"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg></button>
+      </div>
+      <figcaption class="now" id="rp-now">Press play.</figcaption>
+    </figure>
+    <div class="mon demo" id="demo" data-state="idle">
+      <div class="mon-head"><b>Demonstration · recorded in another layout</b><span id="dm-state">closed</span></div>
+      <div class="screen wide">
+        <video id="dm" src="assets/demo.mp4" muted playsinline preload="auto"></video>
+        <div class="viewtags" id="dm-tags"><span>third-person</span><span>wrist</span></div>
+        <div class="coarse-view" id="dm-coarse" hidden>
+          <div class="kfgrid" id="dm-kf"></div>
+          <pre class="mapline">phase 2 [62,109) gripper closed: opens flat_stove_1
+phase 4 [203,262) gripper closed: carries moka_pot_1 into flat_stove_1_burner
+moments: grasp 1 (62), open flat_stove_1 (100), release 1 (109), grasp 2 (203), release 2 (262)</pre>
+        </div>
+        <div class="idle-note">Closed until the agent asks for it.</div>
+      </div>
+      <div class="call" id="dm-call"><span class="mono">No demonstration call yet</span></div>
+      <blockquote class="quote" id="dm-quote">The agent’s message appears here.</blockquote>
+      <div class="lookbar" aria-hidden="true"><i id="dm-prog"></i></div>
+    </div>
+  </div>
+  <div class="tl-wrap">
+    <div class="tl" id="tl" role="slider" tabindex="0" aria-label="Episode position" aria-valuemin="0" aria-valuemax="738" aria-valuenow="0">
+      <div class="tl-track" id="tl-track"></div>
+      <div class="tl-head" id="tl-head" style="left:0%"></div>
+    </div>
+    <div class="controls">
+      <button class="btn primary" id="rp-btn" type="button">Play</button>
+      <label for="rp-pause"><input type="checkbox" id="rp-pause" checked> Pause at each look</label>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--stage-move)"></i>analytic move</span>
+        <span><i class="sw" style="background:var(--coarse)"></i>π0.5 policy</span>
+        <span><i class="sw di" style="background:var(--coarse)"></i>reads L0–L2</span>
+        <span><i class="sw di" style="background:var(--look)"></i>opens a clip</span>
+      </div>
+    </div>
+  </div>
+  <p class="stage-note">Seven clips in this episode. A clip that comes back was requested again.</p>
+  </div>
+</section>
+
+<section class="sec" id="results">
+  <header>
+    <span class="eyebrow">Results</span>
+    <h2>3.9 points on top of the strongest agent on LIBERO-PRO</h2>
+    <p>Eight cells, 50 episodes each. Two-proportion z-test: z = 2.97, p = 0.003.</p>
+  </header>
+  <div class="ladder">
+    <div class="rung"><span class="v">50.0%</span><span class="n">π<sub>RLinf</sub> end to end</span></div>
+    <div class="arrow"><b>+42.6</b>agent calls it as a tool</div>
+    <div class="rung"><span class="v">92.6%</span><span class="n">RPent</span></div>
+    <div class="arrow"><b>+3.9</b>recursive access to clips</div>
+    <div class="rung us"><span class="v">96.5%</span><span class="n">+ RV-ICL</span></div>
+  </div>
+  <div class="charts">
+    <div class="card full">
+      <h3>LIBERO-PRO by cell</h3>
+      <p class="cap">The gains sit in the three cells where RPent is weakest.</p>
+      <div class="key"><span><i style="background:var(--deemph)"></i>RPent</span><span><i style="background:var(--look)"></i>+ RV-ICL</span><span>success rate, %</span></div>
+      <div class="viz" id="c-pro"></div>
+    </div>
+    <div class="card">
+      <h3>Same video, different access</h3>
+      <p class="cap">Recursive access: up to +12. Other forms: at most +2.</p>
+      <div class="viz" id="c-abl"></div>
+    </div>
+    <div class="card">
+      <h3>LIBERO-Plus</h3>
+      <p class="cap">120 variants, 86.7% to 95.8%.</p>
+      <div class="key"><span><i style="background:var(--deemph)"></i>RPent</span><span><i style="background:var(--look)"></i>+ RV-ICL</span><span>success rate, %</span></div>
+      <div class="viz" id="c-plus"></div>
+    </div>
+    <div class="card">
+      <h3>Clip views per episode</h3>
+      <p class="cap">97% of the 400 episodes re-enter the demonstration.</p>
+      <div class="viz" id="c-views"></div>
+      <p class="cap">Why, in 100 sampled re-entries:</p>
+      <div class="split" role="img" aria-label="68 after a step went wrong, 32 to prepare the next contact"><i style="width:68%"></i><i style="width:32%"></i></div>
+      <div class="splitkey"><span><b>68</b> after a step went wrong</span><span><b>32</b> before a contact</span></div>
+    </div>
+    <div class="card">
+      <h3>What the agent asks for</h3>
+      <p class="cap">Share of all clip views, %.</p>
+      <div class="viz" id="c-kind"></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="episodes">
+  <header>
+    <span class="eyebrow">More episodes</span>
+    <h2>Four more episodes, at twice the speed</h2>
+  </header>
+  <div class="eps">
+    <figure class="ep"><video src="assets/ep_l10s_t1.mp4" poster="assets/ep_l10s_t1_poster.jpg" controls muted loop playsinline preload="none"></video><figcaption><em>put both the cream cheese box and the butter in the basket</em><span class="tag">LIBERO-10 · S · 7 clips</span></figcaption></figure>
+    <figure class="ep"><video src="assets/ep_l10t_t6.mp4" poster="assets/ep_l10t_t6_poster.jpg" controls muted loop playsinline preload="none"></video><figcaption><em>put the red mug on the plate and put the chocolate pudding to the right of the plate</em><span class="tag">LIBERO-10 · T · 4 clips</span></figcaption></figure>
+    <figure class="ep"><video src="assets/ep_goalt_t1.mp4" poster="assets/ep_goalt_t1_poster.jpg" controls muted loop playsinline preload="none"></video><figcaption><em>put the plate on the stove</em><span class="tag">Goal · T · 10 clips</span></figcaption></figure>
+    <figure class="ep"><video src="assets/ep_objs_t8.mp4" poster="assets/ep_objs_t8_poster.jpg" controls muted loop playsinline preload="none"></video><figcaption><em>pick the chocolate pudding and place it in the basket</em><span class="tag">Object · S · 2 clips</span></figcaption></figure>
+  </div>
+</section>
+
+<section class="sec" id="cite">
+  <header>
+    <span class="eyebrow">Cite</span>
+    <h2>BibTeX</h2>
+  </header>
+  <div class="bib">
+    <button class="pbtn" id="bib-copy" type="button">Copy</button>
+<pre id="bib-text">@misc{bao2026rvicl,
+  title  = {Recursive Video In-Context Learning
+            for Agentic Robot},
+  author = {Bao, Wenrui and Liu, Xinxin and
+            Xu, Bingxin and Shang, Yuzhang},
+  year   = {2026},
+  note   = {Preprint}
+}</pre>
+  </div>
+</section>
+
+<footer><span>RV-ICL · <a href="#top">Back to top</a></span></footer>
+</div>
+<div id="tip" hidden></div>
+
+<script>
+(function () {
+  "use strict";
+  var FPS = 20, F = 738, DEMO_T = 272;
+  var $ = function (id) { return document.getElementById(id); };
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- keyframe sprite cells ---------- */
+  function kfCell(i) { var d = el("div", "kf"); d.style.backgroundPosition = ((i % 4) * 100 / 3) + "% " + (Math.floor(i / 4) * 100 / 3) + "%"; return d; }
+  for (var i = 0; i < 16; i++) $("dm-kf").appendChild(kfCell(i));
+  (function () {
+    var lit = { 7: 0.35, 11: 0.75, 14: 1.15 };
+    for (var i = 0; i < 16; i++) { var c = kfCell(i); if (lit[i] != null) { c.classList.add("lit"); c.style.animationDelay = lit[i] + "s"; } $("reel").appendChild(c); }
+    var K = { 0: 1, 6: 1, 12: 1, 18: 1, 24: 1, 31: 1 };
+    function glyph(id, f) { for (var i = 0; i < 32; i++) $(id).appendChild(el("i", f(i))); }
+    glyph("g-len", function () { return "on"; });
+    glyph("g-res", function (i) { return K[i] ? "on" : (i === 9 || i === 10 || i === 21 || i === 22) ? "miss" : ""; });
+    glyph("g-tim", function (i) { return (i >= 8 && i <= 11) ? "hit" : K[i] ? "plan" : ""; });
+    var links = Array.prototype.slice.call(document.querySelectorAll(".top nav a"));
+    if ("IntersectionObserver" in window) {
+      var io = new IntersectionObserver(function (es) {
+        es.forEach(function (e) { if (e.isIntersecting) links.forEach(function (a) { a.classList.toggle("on", a.getAttribute("href") === "#" + e.target.id); }); });
+      }, { rootMargin: "-30% 0px -62% 0px" });
+      links.forEach(function (a) { var s = document.getElementById(a.getAttribute("href").slice(1)); if (s) io.observe(s); });
+    }
+  })();
+
+  /* ---------- replay ---------- */
+  var SEG = [
+    { a: 0, b: 42, k: "move", tool: "move_to", say: "moves above the pot" },
+    { a: 42, b: 82, k: "vla", tool: "pi0_pick", say: "π0.5 tries the grasp: “pick up the moka pot”" },
+    { a: 82, b: 122, k: "vla", tool: "pi0_pick", say: "π0.5 tries again: “pick up the moka pot by its handle”" },
+    { a: 122, b: 169, k: "move", tool: "move_pose", say: "raises the gripper and aligns above the handle" },
+    { a: 169, b: 209, k: "vla", tool: "pi0_pick", say: "π0.5 descends: “grasp the moka pot handle”" },
+    { a: 209, b: 249, k: "vla", tool: "pi0_pick", say: "π0.5 closes on the handle" },
+    { a: 249, b: 255, k: "move", tool: "set_gripper", say: "firms the grip" },
+    { a: 255, b: 322, k: "move", tool: "move_to ×2", say: "lifts the pot clear of the pan" },
+    { a: 322, b: 483, k: "move", tool: "move_to ×2", say: "carries the pot over the burner" },
+    { a: 483, b: 584, k: "move", tool: "move_to ×2", say: "lowers the pot until it seats" },
+    { a: 584, b: 604, k: "move", tool: "release", say: "opens the gripper" },
+    { a: 604, b: 642, k: "move", tool: "move_to", say: "retreats straight up" },
+    { a: 642, b: 687, k: "move", tool: "move_pose", say: "approaches the stove knob" },
+    { a: 687, b: 738, k: "vla", tool: "pi0_doubled", say: "π0.5 turns the stove on" }
+  ];
+  var LOOKS = [
+    { f: 0, coarse: true, call: "view_task_video ×2, view_task_map",
+      q: "The demo turns the knob, grasps the pot’s side handle, and releases only after seating the base on the coil." },
+    { f: 42, name: "grasp 2", r: [179, 219], call: "view_demo_clip(moment=\"grasp 2\")",
+      q: "I’ll refine these points and watch the grasp clip immediately before picking." },
+    { f: 82, name: "grasp 2", r: [179, 219], call: "view_demo_clip(moment=\"grasp 2\")",
+      q: "Pi0 reached the pot but has not closed its fingers." },
+    { f: 122, name: "phase 3", r: [109, 203], call: "view_demo_clip(phase=3)",
+      q: "The fingers remain open over the pot’s shoulder." },
+    { f: 209, name: "grasp 2", r: [179, 219], call: "view_demo_clip(moment=\"grasp 2\")",
+      q: "Pi0 has descended to handle height, but the grip is still open and the pot has tilted slightly." },
+    { f: 483, name: "release 2", r: [238, 272], call: "view_demo_clip(moment=\"release 2\")",
+      q: "The pot obscures the burner in the current wrist view." },
+    { f: 584, name: "release 2", r: [238, 272], call: "view_demo_clip(moment=\"release 2\")",
+      q: "I’ll compare that seated pose to the release moment before opening." },
+    { f: 642, name: "open flat_stove_1", r: [70, 120], call: "view_demo_clip(moment=\"open flat_stove_1\")",
+      q: "I’ll watch the knob-turn clip, then stage above the already-localized control." }
+  ];
+  (function () { var tot = {}, seen = {}; LOOKS.forEach(function (l) { if (l.name) tot[l.name] = (tot[l.name] || 0) + 1; });
+    LOOKS.forEach(function (l) { if (l.name) { seen[l.name] = (seen[l.name] || 0) + 1; l.nth = seen[l.name]; l.of = tot[l.name]; } }); })();
+  var ep = $("ep"), dm = $("dm"), demo = $("demo"), tl = $("tl"), track = $("tl-track"), head = $("tl-head");
+  var btn = $("rp-btn"), big = $("rp-big"), pauseBox = $("rp-pause");
+  var state = "idle", cur = null, lookT0 = 0, lookLeft = 0, softUntil = 0, dmRange = null;
+
+  SEG.forEach(function (s) { var d = el("div", "tl-seg " + s.k); d.style.left = (s.a / F * 100) + "%"; d.style.width = ((s.b - s.a) / F * 100) + "%"; track.appendChild(d); });
+  LOOKS.forEach(function (l) {
+    var m = el("button", "tl-mk" + (l.coarse ? " coarse" : "")); m.type = "button"; m.style.left = (l.f / F * 100) + "%";
+    m.setAttribute("aria-label", "Jump to: " + l.call);
+    m.addEventListener("click", function (e) { e.stopPropagation(); seek(l.f, true); });
+    tl.appendChild(m); l.el = m;
+  });
+
+  function setDemoRange(r) { dmRange = r; if (!r) { dm.pause(); return; } try { dm.currentTime = r[0] / FPS; } catch (e) {} var p = dm.play(); if (p && p.catch) p.catch(function () {}); }
+  function showLook(l, pausing) {
+    cur = l; demo.dataset.state = pausing ? "look" : "soft";
+    $("dm-state").textContent = "open";
+    $("dm-coarse").hidden = !l.coarse; $("dm-tags").hidden = !!l.coarse;
+    var c = $("dm-call"); c.textContent = "";
+    if (l.coarse) { c.appendChild(el("span", "chip l0", "L0")); c.appendChild(el("span", "chip l12", "L1, L2")); }
+    else c.appendChild(el("span", "chip l3", "L3 clip"));
+    c.appendChild(el("span", "mono", l.call));
+    if (l.of > 1) c.appendChild(el("span", "again", "look " + l.nth + " of " + l.of + " at this clip"));
+    $("dm-quote").textContent = "“" + l.q + "”";
+    setDemoRange(l.coarse ? null : l.r);
+  }
+  function closeDemo() {
+    cur = null; demo.dataset.state = "idle"; $("dm-state").textContent = "closed"; $("dm-prog").style.width = "0%";
+    $("dm-coarse").hidden = true; $("dm-tags").hidden = false; setDemoRange(null);
+  }
+  function enterLook(l) {
+    ep.pause(); if (l.f < F) { try { ep.currentTime = l.f / FPS; } catch (e) {} }
+    l.dur = l.coarse ? 2000 : (l.r[1] - l.r[0]) / FPS * 1000;
+    state = "look"; lookLeft = l.dur; lookT0 = performance.now(); showLook(l, true); sync();
+  }
+  function leaveLook() { if (cur) { cur.done = true; cur.el.classList.add("done"); } closeDemo(); state = "play"; playEp(); sync(); }
+  function playEp() { var p = ep.play(); if (p && p.catch) p.catch(function () { state = "paused"; sync(); }); }
+  function frameNow() { return Math.min(F, Math.round(ep.currentTime * FPS)); }
+  function resetLooks(fr) { LOOKS.forEach(function (l) { l.done = l.f < fr; l.el.classList.toggle("done", l.done); }); }
+  function seek(fr, go) {
+    fr = Math.max(0, Math.min(F - 1, fr)); closeDemo(); resetLooks(fr);
+    try { ep.currentTime = fr / FPS; } catch (e) {}
+    if (go || state === "play" || state === "look") { state = "play"; playEp(); } else { state = "paused"; }
+    sync();
+  }
+  function toggle() {
+    if (state === "look") { leaveLook(); return; }
+    if (state === "play") { ep.pause(); state = "paused"; sync(); return; }
+    if (state === "ended") { resetLooks(0); try { ep.currentTime = 0; } catch (e) {} closeDemo(); }
+    state = "play"; playEp(); sync();
+  }
+  function sync() {
+    var fr = frameNow();
+    head.style.left = (fr / F * 100) + "%"; tl.setAttribute("aria-valuenow", String(fr));
+    $("rp-step").textContent = "step " + fr + " / " + F;
+    big.hidden = state !== "idle" && state !== "ended";
+    btn.textContent = state === "play" ? "Pause" : state === "look" ? "Continue" : state === "ended" ? "Replay" : "Play";
+    var now = $("rp-now"); now.textContent = "";
+    if (state === "idle") { now.textContent = "Press play."; return; }
+    if (state === "ended") { now.appendChild(el("span", "chip ok", "task solved")); now.appendChild(document.createTextNode(" The stove is on and the pot sits on the burner.")); return; }
+    if (state === "look") { now.textContent = "The robot waits while the agent reads."; return; }
+    var s = SEG.filter(function (x) { return fr >= x.a && fr < x.b; })[0] || SEG[SEG.length - 1];
+    now.appendChild(el("code", null, s.tool)); now.appendChild(document.createTextNode((s.k === "vla" ? "  " : "  The agent ") + s.say + "."));
+  }
+  function loop(t) {
+    if (state === "play") {
+      var fr = ep.currentTime * FPS;
+      var l = LOOKS.filter(function (x) { return !x.done && fr >= x.f - 0.4; })[0];
+      if (l) {
+        if (pauseBox.checked) enterLook(l);
+        else { l.done = true; l.el.classList.add("done"); showLook(l, false); softUntil = t + 3200; }
+      } else if (demo.dataset.state === "soft" && t > softUntil) closeDemo();
+      sync();
+    } else if (state === "look") {
+      var gone = t - lookT0, over;
+      if (cur.coarse) { $("dm-prog").style.width = Math.min(100, gone / cur.dur * 100) + "%"; over = gone >= cur.dur; }
+      else {
+        /* the robot waits exactly as long as the clip runs: the pause ends when the clip reaches its last frame */
+        var ca = cur.r[0] / FPS, cb = cur.r[1] / FPS;
+        $("dm-prog").style.width = Math.max(0, Math.min(100, (dm.currentTime - ca) / (cb - ca) * 100)) + "%";
+        over = dm.currentTime >= cb - 0.04 || gone > cur.dur + 1500;
+      }
+      if (over) leaveLook();
+    }
+    if (dmRange && !dm.paused && dm.currentTime >= dmRange[1] / FPS - 0.03) dm.pause();
+    exLoop();
+    requestAnimationFrame(loop);
+  }
+  ep.addEventListener("ended", function () {
+    state = "ended"; demo.dataset.state = "soft"; $("dm-state").textContent = "closed"; setDemoRange(null);
+    var c = $("dm-call"); c.textContent = ""; c.appendChild(el("span", "chip ok", "finish")); c.appendChild(el("span", "mono", "status=\"success\""));
+    $("dm-quote").textContent = "“The stove is glowing red and the runtime reports terminated:true. I’ll save the audit and finish the episode.”";
+    sync();
+  });
+  btn.addEventListener("click", toggle); big.addEventListener("click", toggle);
+  ep.addEventListener("click", function () { if (state !== "idle") toggle(); });
+  function tlFrame(e) { var r = tl.getBoundingClientRect(); return Math.round((e.clientX - r.left) / r.width * F); }
+  var drag = false;
+  tl.addEventListener("pointerdown", function (e) { if (e.target.classList.contains("tl-mk")) return; drag = true; tl.setPointerCapture(e.pointerId); seek(tlFrame(e), false); });
+  tl.addEventListener("pointermove", function (e) { if (drag) seek(tlFrame(e), false); });
+  tl.addEventListener("pointerup", function () { drag = false; });
+  tl.addEventListener("keydown", function (e) { if (e.key === "ArrowRight") seek(frameNow() + 20, false); else if (e.key === "ArrowLeft") seek(frameNow() - 20, false); else if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggle(); } });
+
+  /* ---------- hierarchy explorer ---------- */
+  var KF = [[0, "start"], [18, ""], [36, ""], [52, "pre-grasp 1"], [54, ""], [62, "gripper closes 1"], [72, ""], [97, "over target 1"], [109, "gripper opens 1"], [121, "lifted 1"], [193, "pre-grasp 2"], [203, "gripper closes 2"], [234, "lifted 2"], [250, "over target 2"], [262, "gripper opens 2"], [271, "end"]];
+  var PH = [[0, 62, "P1 approach", 0], [62, 109, "P2 turn the stove knob", 1], [109, 203, "P3 retreat, move to the pot", 0], [203, 262, "P4 carry the pot to the burner", 1], [262, 272, "P5 hold", 0]];
+  var MO = [[38, 78, "grasp 1", 0], [70, 120, "open flat_stove_1", 1], [85, 125, "release 1", 0], [179, 219, "grasp 2", 0], [238, 272, "release 2", 0], [232, 272, "end", 1]];
+  var exv = $("exv"), exRange = [179, 219], exBtns = [], exMarks = [];
+  var pct = function (s) { return (s / DEMO_T * 100) + "%"; };
+  function exLabel(chipCls, chip, name, range) { var c = $("ex-chip"); c.className = "chip " + chipCls; c.textContent = chip; $("ex-name").textContent = name; $("ex-range").textContent = range; }
+  function exClear() { exBtns.forEach(function (b) { b.setAttribute("aria-pressed", "false"); }); exMarks.forEach(function (m) { m.classList.remove("on"); }); }
+  function exPlay(on) { if (on) { var p = exv.play(); if (p && p.catch) p.catch(function () {}); } else exv.pause(); $("ex-play").textContent = on ? "Pause" : "Play"; }
+  function exSelect(a, b, name, b1, mark, go) {
+    exClear(); b1.setAttribute("aria-pressed", "true"); mark.classList.add("on"); exRange = [a, b];
+    exLabel("l3", "L3", "clip of " + (name === "end" ? "the episode end" : name), "steps " + a + "–" + b);
+    try { exv.currentTime = a / FPS; } catch (e) {} exPlay(go);
+  }
+  KF.forEach(function (k, i) {
+    var b = el("button", "kfb"); b.type = "button"; b.appendChild(kfCell(i)); b.setAttribute("aria-pressed", "false");
+    b.setAttribute("aria-label", "Keyframe " + (i + 1) + ", step " + k[0] + (k[1] ? ", " + k[1] : ""));
+    b.dataset.tip = "Keyframe " + (i + 1) + " · step " + k[0] + (k[1] ? " · " + k[1] : "");
+    b.addEventListener("click", function () { exClear(); b.setAttribute("aria-pressed", "true"); exRange = null; exPlay(false); try { exv.currentTime = k[0] / FPS; } catch (e) {} exLabel("l0", "L0", "keyframe " + (i + 1) + (k[1] ? " · " + k[1] : ""), "step " + k[0]); });
+    $("ex-kf").appendChild(b); exBtns.push(b);
+    var t = el("i", "tick"); t.style.left = pct(k[0]); $("lane-kf").appendChild(t);
+  });
+  PH.forEach(function (p) {
+    var m = el("i", "ph" + (p[3] ? " closed" : "")); m.style.left = pct(p[0]); m.style.width = pct(p[1] - p[0]); $("lane-ph").appendChild(m); exMarks.push(m);
+    var b = el("button", "opt", p[2]); b.type = "button"; b.setAttribute("aria-pressed", "false");
+    b.addEventListener("click", function () { exSelect(p[0], p[1], "phase " + p[2].slice(1, 2), b, m, true); });
+    $("ex-ph").appendChild(b); exBtns.push(b);
+  });
+  var first = null;
+  MO.forEach(function (p) {
+    var m = el("i", "mo"); m.style.left = pct(p[0]); m.style.width = pct(p[1] - p[0]); m.style.top = (p[3] ? 16 : 2) + "px"; $("lane-mo").appendChild(m); exMarks.push(m);
+    var b = el("button", "opt", p[2]); b.type = "button"; b.setAttribute("aria-pressed", "false");
+    b.addEventListener("click", function () { exSelect(p[0], p[1], p[2], b, m, true); });
+    $("ex-mo").appendChild(b); exBtns.push(b);
+    if (p[2] === "grasp 2") first = [p, b, m];
+  });
+  $("ex-play").addEventListener("click", function () {
+    if (!exRange) exRange = [0, DEMO_T];
+    if (!exv.paused) { exPlay(false); return; }
+    if (exv.currentTime >= exRange[1] / FPS - 0.06 || exv.currentTime < exRange[0] / FPS - 0.06) { try { exv.currentTime = exRange[0] / FPS; } catch (e) {} }
+    exPlay(true);
+  });
+  exv.addEventListener("ended", function () { $("ex-play").textContent = "Replay"; });
+  exv.addEventListener("loadedmetadata", function () { exSelect(first[0][0], first[0][1], first[0][2], first[1], first[2], false); try { exv.currentTime = 203 / FPS; } catch (e) {} });
+  if (exv.readyState >= 1) exSelect(first[0][0], first[0][1], first[0][2], first[1], first[2], false);
+  function exLoop() {
+    $("ex-head").style.left = Math.min(100, exv.currentTime * FPS / DEMO_T * 100) + "%";
+    if (exRange && !exv.paused && exv.currentTime >= exRange[1] / FPS - 0.03) { exv.pause(); $("ex-play").textContent = "Replay"; }
+  }
+
+  /* ---------- charts ---------- */
+  function axis(host, min, max, ticks) {
+    var a = el("div", "axis"); a.appendChild(el("span")); var s = el("div", "scale");
+    ticks.forEach(function (v) { var t = el("span", null, String(v)); t.style.left = ((v - min) / (max - min) * 100) + "%"; s.appendChild(t); });
+    a.appendChild(s); a.appendChild(el("span")); host.appendChild(a);
+  }
+  function table(host, head, rows) {
+    var d = el("details", "tbl"); d.appendChild(el("summary", null, "Show the numbers")); var w = el("div", "scroll"), t = el("table"), tr = el("tr");
+    head.forEach(function (h) { tr.appendChild(el("th", null, h)); }); t.appendChild(tr);
+    rows.forEach(function (r) { var x = el("tr"); r.forEach(function (c) { x.appendChild(el("td", null, String(c))); }); t.appendChild(x); });
+    w.appendChild(t); d.appendChild(w); host.appendChild(d);
+  }
+  function dumbbell(id, rows, min, max, ticks) {
+    var host = $(id); axis(host, min, max, ticks);
+    var X = function (v) { return ((v - min) / (max - min) * 100) + "%"; };
+    rows.forEach(function (r) {
+      var row = el("div", "row" + (r[3] ? " em" : "")); row.tabIndex = 0;
+      var d = r[2] - r[1], sd = (d > 0 ? "+" : d < 0 ? "−" : "±") + Math.abs(d).toFixed(1);
+      row.dataset.tip = r[0] + " · RPent " + r[1].toFixed(1) + " → RV-ICL " + r[2].toFixed(1) + " (" + sd + ")";
+      row.appendChild(el("span", "lab", r[0]));
+      var t = el("div", "track"), ln = el("i", "ln"), a = el("i", "dot a"), b = el("i", "dot b");
+      ln.style.left = X(Math.min(r[1], r[2])); ln.style.width = (Math.abs(d) / (max - min) * 100) + "%"; a.style.left = X(r[1]); b.style.left = X(r[2]);
+      t.appendChild(ln); t.appendChild(a); t.appendChild(b); row.appendChild(t);
+      var v = el("span", "val", r[2].toFixed(1) + " "); v.appendChild(el("small", null, sd)); row.appendChild(v);
+      host.appendChild(row);
+    });
+    table(host, ["", "RPent", "+ RV-ICL", "Δ"], rows.map(function (r) { return [r[0], r[1].toFixed(1), r[2].toFixed(1), (r[2] - r[1] >= 0 ? "+" : "−") + Math.abs(r[2] - r[1]).toFixed(1)]; }));
+  }
+  function bars(host, rows, max, unit, one) {
+    rows.forEach(function (r) {
+      var row = el("div", "row" + (r[2] ? " em" : "")); row.tabIndex = 0; row.dataset.tip = r[0] + " · " + r[1] + unit;
+      row.appendChild(el("span", "lab", r[0]));
+      var t = el("div", "track bars"), b = el("i", "bar" + (one ? " one" : "")); b.style.width = (r[1] / max * 100) + "%"; t.appendChild(b); row.appendChild(t);
+      row.appendChild(el("span", "val", r[1] + unit)); host.appendChild(row);
+    });
+  }
+  dumbbell("c-pro", [["Spatial-T", 100, 100], ["Spatial-S", 98, 100], ["Object-T", 100, 100], ["Object-S", 99, 100], ["Goal-T", 88, 100], ["Goal-S", 99, 98], ["L10-T", 85, 90], ["L10-S", 72, 84], ["Overall", 92.6, 96.5, 1]], 60, 100, [60, 70, 80, 90, 100]);
+  dumbbell("c-plus", [["Layout", 82.4, 88.2], ["Camera", 83.3, 94.4], ["Robot init", 82.4, 94.1], ["Language", 100, 100], ["Lighting", 76.5, 94.1], ["Background", 88.2, 100], ["Noise", 94.1, 100], ["All", 86.7, 95.8, 1]], 60, 100, [60, 70, 80, 90, 100]);
+  (function () {
+    var host = $("c-abl"), duo = el("div", "duo");
+    [["LIBERO-10-T", [85, 86, 84, 90]], ["LIBERO-10-S", [72, 74, 66, 84]]].forEach(function (c) {
+      var box = el("div", "viz"); box.appendChild(el("h4", null, c[0] + ", success %")); axis(box, 0, 100, [0, 25, 50, 75, 100]);
+      bars(box, [["Text", c[1][0]], ["Keyframes", c[1][1]], ["Full video", c[1][2]], ["RV-ICL", c[1][3], 1]], 100, "");
+      duo.appendChild(box);
+    });
+    host.appendChild(duo);
+    table(host, ["Arm", "L10-T", "L10-S"], [["Text", "85.0", "72.0"], ["Keyframes", "86.0", "74.0"], ["Full video", "84.0", "66.0"], ["RV-ICL", "90.0", "84.0"]]);
+  })();
+  (function () {
+    var h = $("c-views"); axis(h, 0, 12, [0, 3, 6, 9, 12]);
+    bars(h, [["Spatial", 2.8], ["Object", 2.3], ["Goal", 3.9], ["LIBERO-10", 10.4]], 12, "", true);
+    table(h, ["Suite", "Clip views / episode", "Episodes with re-entry"], [["Spatial", "2.8", "98%"], ["Object", "2.3", "98%"], ["Goal", "3.9", "92%"], ["LIBERO-10", "10.4", "98%"], ["All", "4.8", "97%"]]);
+    var k = $("c-kind"); axis(k, 0, 50, [0, 25, 50]); bars(k, [["Grasp", 40], ["Release", 30], ["Fixture or end", 15], ["Whole phase", 16]], 50, "%", true);
+    k.querySelectorAll(".track.bars").forEach(function (t) { t.style.backgroundSize = "50% 100%"; });
+  })();
+
+  /* ---------- tooltip ---------- */
+  var tip = $("tip");
+  function showTip(t) { tip.textContent = t.dataset.tip; tip.hidden = false; var r = t.getBoundingClientRect(), w = tip.offsetWidth; tip.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + "px"; tip.style.top = Math.max(8, r.top - tip.offsetHeight - 8) + "px"; }
+  document.addEventListener("pointerover", function (e) { var t = e.target.closest && e.target.closest("[data-tip]"); if (t) showTip(t); else tip.hidden = true; });
+  document.addEventListener("focusin", function (e) { var t = e.target.closest && e.target.closest("[data-tip]"); if (t) showTip(t); });
+  document.addEventListener("focusout", function () { tip.hidden = true; });
+  window.addEventListener("scroll", function () { tip.hidden = true; }, { passive: true });
+
+  /* ---------- copy ---------- */
+  $("bib-copy").addEventListener("click", function () {
+    var b = this, txt = $("bib-text").textContent;
+    function done(ok) { b.textContent = ok ? "Copied" : "Select and copy"; setTimeout(function () { b.textContent = "Copy"; }, 1800); }
+    try { navigator.clipboard.writeText(txt).then(function () { done(true); }, function () { sel(); done(false); }); } catch (e) { sel(); done(false); }
+    function sel() { var r = document.createRange(); r.selectNodeContents($("bib-text")); var s = window.getSelection(); s.removeAllRanges(); s.addRange(r); }
+  });
+
+  sync(); requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
