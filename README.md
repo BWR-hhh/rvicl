@@ -5,6 +5,11 @@ LIBERO-PRO, built on [RPent / HarnessVLA](https://github.com/RLinf/RPent).
 
 **[Project page](https://bwr-hhh.github.io/rvicl/)** with a replay of one episode, the demonstration hierarchy and the results.
 
+![One episode replayed with the agent's tool calls: the robot on the left, the demonstration clip the agent asked for on the right](assets/replay.gif)
+
+One LIBERO-10 episode under position swap, replayed with the agent's tool calls. The robot (left, 2.5x speed) waits whenever the
+agent opens the demonstration, and the clip it asked for plays on the right. The project page has the interactive version.
+
 ## What is in this repository
 
 ```
