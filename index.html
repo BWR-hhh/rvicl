@@ -358,7 +358,7 @@ footer a { color: var(--ink-2); }
   <p class="lede">The agent gets one demonstration video. It reads an outline before planning and opens one clip whenever a step needs detail.</p>
   <ul class="facts"><li>No training</li><li>Frozen VLA</li><li>One demonstration per task</li></ul>
   <dl class="glance" aria-label="Headline results">
-    <div><dt>96.5%</dt><dd><b>LIBERO-PRO</b><br>+3.9 over RPent</dd></div>
+    <div><dt>96.5%</dt><dd><b>LIBERO-PRO</b><br>+3.9 over HarnessVLA</dd></div>
     <div><dt>95.8%</dt><dd><b>LIBERO-Plus</b><br>up from 86.7%</dd></div>
     <div><dt>97%</dt><dd><b>Re-entry</b><br>share of episodes</dd></div>
   </dl>
@@ -521,15 +521,15 @@ moments: grasp 1 (62), open flat_stove_1 (100), release 1 (109), grasp 2 (203), 
   <div class="ladder">
     <div class="rung"><span class="v">50.0%</span><span class="n">π<sub>RLinf</sub> end to end</span></div>
     <div class="arrow"><b>+42.6</b>agent calls it as a tool</div>
-    <div class="rung"><span class="v">92.6%</span><span class="n">RPent</span></div>
+    <div class="rung"><span class="v">92.6%</span><span class="n">HarnessVLA</span></div>
     <div class="arrow"><b>+3.9</b>recursive access to clips</div>
     <div class="rung us"><span class="v">96.5%</span><span class="n">+ RV-ICL</span></div>
   </div>
   <div class="charts">
     <div class="card full">
       <h3>LIBERO-PRO by cell</h3>
-      <p class="cap">The gains sit in the three cells where RPent is weakest.</p>
-      <div class="key"><span><i style="background:var(--deemph)"></i>RPent</span><span><i style="background:var(--look)"></i>+ RV-ICL</span><span>success rate, %</span></div>
+      <p class="cap">The gains sit in the three cells where HarnessVLA is weakest.</p>
+      <div class="key"><span><i style="background:var(--deemph)"></i>HarnessVLA</span><span><i style="background:var(--look)"></i>+ RV-ICL</span><span>success rate, %</span></div>
       <div class="viz" id="c-pro"></div>
     </div>
     <div class="card">
@@ -540,7 +540,7 @@ moments: grasp 1 (62), open flat_stove_1 (100), release 1 (109), grasp 2 (203), 
     <div class="card">
       <h3>LIBERO-Plus</h3>
       <p class="cap">120 variants, 86.7% to 95.8%.</p>
-      <div class="key"><span><i style="background:var(--deemph)"></i>RPent</span><span><i style="background:var(--look)"></i>+ RV-ICL</span><span>success rate, %</span></div>
+      <div class="key"><span><i style="background:var(--deemph)"></i>HarnessVLA</span><span><i style="background:var(--look)"></i>+ RV-ICL</span><span>success rate, %</span></div>
       <div class="viz" id="c-plus"></div>
     </div>
     <div class="card">
@@ -829,7 +829,7 @@ moments: grasp 1 (62), open flat_stove_1 (100), release 1 (109), grasp 2 (203), 
     rows.forEach(function (r) {
       var row = el("div", "row" + (r[3] ? " em" : "")); row.tabIndex = 0;
       var d = r[2] - r[1], sd = (d > 0 ? "+" : d < 0 ? "−" : "±") + Math.abs(d).toFixed(1);
-      row.dataset.tip = r[0] + " · RPent " + r[1].toFixed(1) + " → RV-ICL " + r[2].toFixed(1) + " (" + sd + ")";
+      row.dataset.tip = r[0] + " · HarnessVLA " + r[1].toFixed(1) + " → RV-ICL " + r[2].toFixed(1) + " (" + sd + ")";
       row.appendChild(el("span", "lab", r[0]));
       var t = el("div", "track"), ln = el("i", "ln"), a = el("i", "dot a"), b = el("i", "dot b");
       ln.style.left = X(Math.min(r[1], r[2])); ln.style.width = (Math.abs(d) / (max - min) * 100) + "%"; a.style.left = X(r[1]); b.style.left = X(r[2]);
@@ -837,7 +837,7 @@ moments: grasp 1 (62), open flat_stove_1 (100), release 1 (109), grasp 2 (203), 
       var v = el("span", "val", r[2].toFixed(1) + " "); v.appendChild(el("small", null, sd)); row.appendChild(v);
       host.appendChild(row);
     });
-    table(host, ["", "RPent", "+ RV-ICL", "Δ"], rows.map(function (r) { return [r[0], r[1].toFixed(1), r[2].toFixed(1), (r[2] - r[1] >= 0 ? "+" : "−") + Math.abs(r[2] - r[1]).toFixed(1)]; }));
+    table(host, ["", "HarnessVLA", "+ RV-ICL", "Δ"], rows.map(function (r) { return [r[0], r[1].toFixed(1), r[2].toFixed(1), (r[2] - r[1] >= 0 ? "+" : "−") + Math.abs(r[2] - r[1]).toFixed(1)]; }));
   }
   function bars(host, rows, max, unit, one) {
     rows.forEach(function (r) {
