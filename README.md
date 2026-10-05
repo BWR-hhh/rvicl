@@ -1,7 +1,7 @@
 # RV-ICL on LIBERO
 
-A runnable pipeline for **RV-ICL** ("Look Only as Needed: Recursive Video In-Context Learning for
-LLM Robot Agents") on LIBERO-PRO, built on [RPent / HarnessVLA](https://github.com/RLinf/RPent).
+A runnable pipeline for **RV-ICL** ("Recursive Video In-Context Learning for Agentic Robot") on
+LIBERO-PRO, built on [RPent / HarnessVLA](https://github.com/RLinf/RPent).
 
 **[Project page](https://bwr-hhh.github.io/rvicl/)** with a replay of one episode, the demonstration hierarchy and the results.
 
@@ -136,7 +136,7 @@ the shared services.
 
 ```bibtex
 @article{bao2026rvicl,
-  title  = {Look Only as Needed: Recursive Video In-Context Learning for LLM Robot Agents},
+  title  = {Recursive Video In-Context Learning for Agentic Robot},
   author = {Bao, Wenrui and Liu, Xinxin and Xu, Bingxin and Shang, Yuzhang},
   year   = {2026},
 }
