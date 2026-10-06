@@ -110,6 +110,9 @@ p { margin: 0; }
 .names { gap: 4px 28px; font-family: var(--display); font-weight: 600; font-size: clamp(1rem, 1.7vw, 1.2rem); color: var(--ink); }
 .affil { gap: 2px 22px; font-size: 14.5px; color: var(--ink-2); }
 .authors sup { font-size: 0.68em; line-height: 0; margin-inline: 1px; color: var(--ink-3); }
+.links { gap: 10px; margin-top: 8px; }
+.links a { font: 600 14.5px var(--body); color: var(--ink); text-decoration: none; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; }
+.links a:hover { border-color: var(--ink-3); }
 .hero .lede { max-width: 62ch; min-width: 0; font-size: clamp(1.05rem, 1.6vw, 1.2rem); color: var(--ink); }
 .facts { display: flex; flex-direction: column; gap: 6px 22px; min-width: 0; font-size: 15px; color: var(--ink-2); padding: 0; margin: 0; list-style: none; }
 .facts li { display: flex; gap: 8px; align-items: center; }
@@ -355,6 +358,7 @@ footer a { color: var(--ink-2); }
   <div class="authors">
     <p class="names"><span>Wenrui Bao<sup>1</sup></span><span>Xinxin Liu<sup>1</sup></span><span>Bingxin Xu<sup>2</sup></span><span>Yuzhang Shang<sup>1*</sup></span></p>
     <p class="affil"><span><sup>1</sup>University of Central Florida</span><span><sup>2</sup>University of Southern California</span><span><sup>*</sup>Corresponding author</span></p>
+    <p class="links"><a href="https://arxiv.org/abs/2610.06843" target="_blank" rel="noopener">Paper · arXiv 2610.06843 <span aria-hidden="true">↗</span></a></p>
   </div>
   </div>
   <p class="lede">The agent gets one demonstration video. It reads an outline before planning and opens one clip whenever a step needs detail.</p>
@@ -581,13 +585,13 @@ moments: grasp 1 (62), open flat_stove_1 (100), release 1 (109), grasp 2 (203), 
   </header>
   <div class="bib">
     <button class="pbtn" id="bib-copy" type="button">Copy</button>
-<pre id="bib-text">@misc{bao2026rvicl,
-  title  = {Recursive Video In-Context Learning
-            for Agentic Robot},
-  author = {Bao, Wenrui and Liu, Xinxin and
-            Xu, Bingxin and Shang, Yuzhang},
-  year   = {2026},
-  note   = {Preprint}
+<pre id="bib-text">@article{bao2026rvicl,
+  title   = {Recursive Video In-Context Learning
+             for Agentic Robot},
+  author  = {Bao, Wenrui and Liu, Xinxin and
+             Xu, Bingxin and Shang, Yuzhang},
+  journal = {arXiv preprint arXiv:2610.06843},
+  year    = {2026}
 }</pre>
   </div>
 </section>
