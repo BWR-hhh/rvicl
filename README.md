@@ -3,7 +3,7 @@
 A runnable pipeline for **RV-ICL** ("Recursive Video In-Context Learning for Agentic Robot") on
 LIBERO-PRO, built on [RPent / HarnessVLA](https://github.com/RLinf/RPent).
 
-**[Project page](https://bwr-hhh.github.io/rvicl/)** with a replay of one episode, the demonstration hierarchy and the results.
+**[Paper (arXiv:2610.06843)](https://arxiv.org/abs/2610.06843)** · **[Project page](https://bwr-hhh.github.io/rvicl/)** with a replay of one episode, the demonstration hierarchy and the results.
 
 ![One episode replayed with the agent's tool calls: the robot on the left, the demonstration clip the agent asked for on the right](assets/replay.gif)
 
@@ -141,9 +141,10 @@ the shared services.
 
 ```bibtex
 @article{bao2026rvicl,
-  title  = {Recursive Video In-Context Learning for Agentic Robot},
-  author = {Bao, Wenrui and Liu, Xinxin and Xu, Bingxin and Shang, Yuzhang},
-  year   = {2026},
+  title   = {Recursive Video In-Context Learning for Agentic Robot},
+  author  = {Bao, Wenrui and Liu, Xinxin and Xu, Bingxin and Shang, Yuzhang},
+  journal = {arXiv preprint arXiv:2610.06843},
+  year    = {2026}
 }
 ```
 
