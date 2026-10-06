@@ -101,7 +101,10 @@ p { margin: 0; }
 @keyframes lit { 0% { box-shadow: 0 0 0 2px var(--look), 0 0 0 0 color-mix(in srgb, var(--look) 70%, transparent); } 100% { box-shadow: 0 0 0 2px var(--look), 0 0 0 12px transparent; } }
 @keyframes pulse { from { transform: scale(.92); opacity: .85; } to { transform: scale(1.4); opacity: 0; } }
 @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } .reel-strip .kf.lit { animation: lit 1.4s ease-out 2; } .bigplay::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 2px solid var(--look); animation: pulse 2.2s ease-out infinite; } }
-.hero h1 { font-stretch: 88%; font-weight: 800; font-size: clamp(1.45rem, 3.4vw, 2.45rem); line-height: 1.08; letter-spacing: -0.015em; white-space: nowrap; }
+.hero h1 { display: flex; flex-direction: column; gap: 0.14em; font-stretch: 92%; font-weight: 800; font-size: clamp(1.9rem, 5.6vw, 3.9rem); line-height: 1.02; letter-spacing: -0.022em; }
+.hero h1 .t1 { white-space: nowrap; }
+.hero h1 .nb { white-space: nowrap; }
+.hero h1 .t2 { font-size: 0.6em; font-stretch: 100%; font-weight: 600; letter-spacing: -0.01em; color: var(--ink-2); }
 .hero h1 em { font-style: normal; color: var(--look); }
 .authors { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
 .authors p { display: flex; flex-wrap: wrap; }
@@ -324,7 +327,7 @@ footer a { color: var(--ink-2); }
   .eps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .legend { margin-left: 0; }
 }
-@media (max-width: 700px) { .hero h1 { white-space: normal; font-size: clamp(1.6rem, 7vw, 2.2rem); } }
+@media (max-width: 700px) { .hero h1 { font-size: clamp(2rem, 9.6vw, 2.9rem); } .hero h1 .t1 { white-space: normal; } }
 @media (max-width: 520px) {
   body { font-size: 16px; }
   .axis, .row { grid-template-columns: 74px minmax(0, 1fr) 82px; gap: 8px; }
@@ -349,7 +352,7 @@ footer a { color: var(--ink-2); }
 <section class="hero">
   <div class="hero-head">
   <span class="eyebrow">Preprint · 2026</span>
-  <h1><em>Recursive</em> Video In-Context Learning for Agentic Robot</h1>
+  <h1><span class="t1"><em>Recursive</em> Video <span class="nb">In-Context</span> Learning</span> <span class="t2">for Agentic Robot</span></h1>
   <div class="authors">
     <p class="names"><span>Wenrui Bao<sup>1</sup></span><span>Xinxin Liu<sup>1</sup></span><span>Bingxin Xu<sup>2</sup></span><span>Yuzhang Shang<sup>1*</sup></span></p>
     <p class="affil"><span><sup>1</sup>University of Central Florida</span><span><sup>2</sup>University of Southern California</span><span><sup>*</sup>Corresponding author</span></p>
