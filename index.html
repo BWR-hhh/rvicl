@@ -101,10 +101,10 @@ p { margin: 0; }
 @keyframes lit { 0% { box-shadow: 0 0 0 2px var(--look), 0 0 0 0 color-mix(in srgb, var(--look) 70%, transparent); } 100% { box-shadow: 0 0 0 2px var(--look), 0 0 0 12px transparent; } }
 @keyframes pulse { from { transform: scale(.92); opacity: .85; } to { transform: scale(1.4); opacity: 0; } }
 @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } .reel-strip .kf.lit { animation: lit 1.4s ease-out 2; } .bigplay::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 2px solid var(--look); animation: pulse 2.2s ease-out infinite; } }
-.hero h1 { display: flex; flex-direction: column; gap: 0.14em; font-stretch: 92%; font-weight: 800; font-size: clamp(1.9rem, 5.6vw, 3.9rem); line-height: 1.02; letter-spacing: -0.022em; }
+.hero h1 { display: flex; flex-direction: column; gap: 0.14em; font-stretch: 92%; font-weight: 800; font-size: clamp(1.9rem, 5.6vw, 3.9rem); line-height: 1.02; letter-spacing: -0.022em; color: var(--look); }
 .hero h1 .t1 { white-space: nowrap; }
 .hero h1 .nb { white-space: nowrap; }
-.hero h1 .t2 { font-size: 0.6em; font-stretch: 100%; font-weight: 600; letter-spacing: -0.01em; color: var(--ink-2); }
+.hero h1 .t2 { font-size: 0.6em; font-stretch: 100%; font-weight: 600; letter-spacing: -0.01em; }
 .authors { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
 .authors p { display: flex; flex-wrap: wrap; }
 .names { gap: 4px 28px; font-family: var(--display); font-weight: 600; font-size: clamp(1rem, 1.7vw, 1.2rem); color: var(--ink); }
