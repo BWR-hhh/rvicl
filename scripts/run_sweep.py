@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Run LIBERO-PRO cells with the six-rule video prompt and score them from the simulator.
 
-    python scripts/run_sweep.py --suites all --tasks 0-9 --seeds 1-3 --gpu 0 --parallel 2
+    python scripts/run_sweep.py --suites all --tasks 0-9 --seeds 1-5 --gpu 0 --parallel 2
     python scripts/run_sweep.py --suites libero_10_swap --tasks 4 --seeds 1 --dry-run
 
 One row per attempt is appended to <out>/results.csv and the sweep resumes from it: a cell with a
@@ -213,7 +213,7 @@ def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--suites", default="all", help="comma list of suites, or 'all' for the eight LIBERO-PRO suites")
     p.add_argument("--tasks", default="0-9")
-    p.add_argument("--seeds", default="1-3", help="seed 0 is the seed the shipped memory was built on; keep it out")
+    p.add_argument("--seeds", default="1-5", help="seed 0 is the seed the shipped memory was built on; keep it out")
     p.add_argument("--out", default=str(ROOT / "runs" / "sweep"))
     p.add_argument("--gpu", type=int, default=0)
     p.add_argument("--parallel", type=int, default=1, help="cells in flight (each adds ~3 GB host memory)")

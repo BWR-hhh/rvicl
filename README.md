@@ -119,10 +119,10 @@ for a pan) and LIBERO-PRO ships no demonstrations of its own, so those suites ge
 `--task-video-cross-task`, which tells the planner the demonstration was recorded for the original
 instruction. `run_sweep.py` adds it by itself.
 
-A sweep (eight suites x ten tasks x seeds 1-3, resumable):
+A sweep (eight suites x ten tasks x seeds 1-5, resumable):
 
 ```bash
-python scripts/run_sweep.py --suites all --tasks 0-9 --seeds 1-3 --gpu 0 --parallel 2
+python scripts/run_sweep.py --suites all --tasks 0-9 --seeds 1-5 --gpu 0 --parallel 2
 python scripts/run_sweep.py --suites libero_10_swap --tasks 4 --seeds 1 --dry-run   # print the commands
 ```
 
@@ -133,7 +133,7 @@ recovered from) is marked invalid and retried up to `--attempts` times; an episo
 re-run. The summary table is printed at the end.
 
 Defaults: `--max-turns 100`, `--planner-timeout-s 5000`, `--cell-timeout-s 7200`,
-`--max-episode-steps 10000`, `--reasoning-effort low`. Seeds 1-3 only: seed 0 is the seed the
+`--max-episode-steps 10000`, `--reasoning-effort low`. Seeds 1-5 only: seed 0 is the seed the
 memory corpus was built on. Each cell in flight adds roughly 3 GB of host memory on top of
 the shared services.
 
