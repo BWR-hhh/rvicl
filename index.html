@@ -210,6 +210,8 @@ p { margin: 0; }
 .lv-h { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
 .lv-h strong { font-family: var(--display); font-stretch: 108%; font-weight: 700; font-size: 1rem; }
 .lv-h span.d { color: var(--ink-3); font-size: 14.5px; }
+.lv-h.sub strong { font-size: 0.92rem; font-weight: 600; }
+.lvgroup { display: flex; flex-direction: column; gap: 14px; min-width: 0; padding-left: 14px; border-left: 2px solid var(--line); }
 .kfstrip { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; }
 .kfb { border: 0; padding: 0; background: none; cursor: pointer; border-radius: 4px; overflow: hidden; outline-offset: 1px; }
 .kfb .kf { border-radius: 4px; }
@@ -378,7 +380,7 @@ footer a { color: var(--ink-2); }
   <header>
     <span class="eyebrow">Method</span>
     <h2>A demonstration the agent can navigate</h2>
-    <p>Each demonstration is indexed offline at four levels. The agent reads the coarse levels once, then returns for one clip at a time.</p>
+    <p>Each demonstration is indexed offline as keyframes plus an event index. The agent reads both once, then returns for one clip at a time.</p>
   </header>
   <figure class="figure">
     <div class="plate"><img src="assets/architecture.png" alt="Architecture of RV-ICL on RPent: the LLM planner calls demonstration tools that read the hierarchy and robot tools that act on the environment." width="1098" height="462"></div>
@@ -386,13 +388,13 @@ footer a { color: var(--ink-2); }
   </figure>
   <div class="steps">
     <div class="step">
-      <div class="lvrow"><span class="chip l0">L0</span><span class="chip l12">L1</span><span class="chip l12">L2</span><span class="when">before the first action</span></div>
-      <h3>Coarse levels before planning</h3>
-      <p>Keyframes and the phase map. No clip yet.</p>
+      <div class="lvrow"><span class="chip l0">keyframes</span><span class="chip l12">event index</span><span class="when">before the first action</span></div>
+      <h3>Read once before planning</h3>
+      <p>Keyframes and the event index. No clip yet.</p>
       <div class="tools"><code>view_task_video</code><code>view_task_map</code></div>
     </div>
     <div class="step">
-      <div class="lvrow"><span class="chip l3">L3</span><span class="when">before a contact, or after a failed step</span></div>
+      <div class="lvrow"><span class="chip l3">clip</span><span class="when">before a contact, or after a failed step</span></div>
       <h3>Re-entry during execution</h3>
       <p>One clip of the current sub-goal.</p>
       <div class="tools"><code>view_demo_clip</code></div>
@@ -416,7 +418,7 @@ footer a { color: var(--ink-2); }
 <section class="sec" id="hierarchy">
   <header>
     <span class="eyebrow">The demonstration hierarchy</span>
-    <h2>One demonstration, indexed at four levels</h2>
+    <h2>One demonstration: keyframes and an event index</h2>
     <p>Pick a phase or a moment to see the clip the agent would get.</p>
   </header>
   <div class="ex">
@@ -425,7 +427,7 @@ footer a { color: var(--ink-2); }
         <video id="exv" src="assets/demo.mp4" muted playsinline preload="auto"></video>
         <div class="viewtags"><span>third-person</span><span>wrist</span></div>
       </div>
-      <div class="ex-label"><span class="chip l3" id="ex-chip">L3</span><b id="ex-name">clip of grasp 2</b><span id="ex-range">steps 179–219</span><button class="pbtn" id="ex-play" type="button">Play</button></div>
+      <div class="ex-label"><span class="chip l3" id="ex-chip">clip</span><b id="ex-name">grasp 2</b><span id="ex-range">steps 179–219</span><button class="pbtn" id="ex-play" type="button">Play</button></div>
       <pre class="maptext" aria-label="The phase map the agent reads">phase 1 [0,62) open: approach
 phase 2 [62,109) closed: opens flat_stove_1
 phase 3 [109,203) open: retreat
@@ -436,11 +438,13 @@ goal: (And (Turnon flat_stove_1) (On moka_pot_1 flat_stove_1_cook_region))</pre>
     </div>
     <div class="ex-levels">
       <div class="lv">
-        <div class="lv-h"><span class="chip l0">L0</span><strong>Keyframes</strong><span class="d">around every grasp and release</span></div>
+        <div class="lv-h"><strong>Keyframes</strong><span class="d">around every grasp and release</span></div>
         <div class="kfstrip" id="ex-kf"></div>
       </div>
+      <div class="lvgroup">
+      <div class="lv-h"><strong>Event index</strong><span class="d">each entry names a step, its clip shows it</span></div>
       <div class="lv">
-        <div class="lv-h"><span class="chip l12">L1</span><strong>Phases</strong><span class="d">between gripper events, as text</span></div>
+        <div class="lv-h sub"><strong>Phases</strong><span class="d">between gripper events, as text</span></div>
         <div class="lanes" id="ex-lanes">
           <div class="lane" id="lane-kf" aria-hidden="true"></div>
           <div class="lane" id="lane-ph" aria-hidden="true"></div>
@@ -450,11 +454,12 @@ goal: (And (Turnon flat_stove_1) (On moka_pot_1 flat_stove_1_cook_region))</pre>
         <div class="opts" id="ex-ph"></div>
       </div>
       <div class="lv">
-        <div class="lv-h"><span class="chip l12">L2</span><strong>Moments</strong><span class="d">short windows around each sub-event</span></div>
+        <div class="lv-h sub"><strong>Moments</strong><span class="d">short windows around each sub-event</span></div>
         <div class="opts" id="ex-mo"></div>
       </div>
       <div class="lv">
-        <div class="lv-h"><span class="chip l3">L3</span><strong>Clips</strong><span class="d">frames of one phase or moment, loaded on demand</span></div>
+        <div class="lv-h sub"><strong>Clips</strong><span class="d">the frames behind an entry, loaded on demand</span></div>
+      </div>
       </div>
     </div>
   </div>
@@ -509,7 +514,7 @@ moments: grasp 1 (62), open flat_stove_1 (100), release 1 (109), grasp 2 (203), 
       <div class="legend">
         <span><i class="sw" style="background:var(--stage-move)"></i>analytic move</span>
         <span><i class="sw" style="background:var(--coarse)"></i>π0.5 policy</span>
-        <span><i class="sw di" style="background:var(--coarse)"></i>reads L0–L2</span>
+        <span><i class="sw di" style="background:var(--coarse)"></i>reads keyframes + index</span>
         <span><i class="sw di" style="background:var(--look)"></i>opens a clip</span>
       </div>
     </div>
@@ -683,8 +688,8 @@ moments: grasp 1 (62), open flat_stove_1 (100), release 1 (109), grasp 2 (203), 
     $("dm-state").textContent = "open";
     $("dm-coarse").hidden = !l.coarse; $("dm-tags").hidden = !!l.coarse;
     var c = $("dm-call"); c.textContent = "";
-    if (l.coarse) { c.appendChild(el("span", "chip l0", "L0")); c.appendChild(el("span", "chip l12", "L1, L2")); }
-    else c.appendChild(el("span", "chip l3", "L3 clip"));
+    if (l.coarse) { c.appendChild(el("span", "chip l0", "keyframes")); c.appendChild(el("span", "chip l12", "index")); }
+    else c.appendChild(el("span", "chip l3", "clip"));
     c.appendChild(el("span", "mono", l.call));
     if (l.of > 1) c.appendChild(el("span", "again", "look " + l.nth + " of " + l.of + " at this clip"));
     $("dm-quote").textContent = "“" + l.q + "”";
@@ -778,14 +783,14 @@ moments: grasp 1 (62), open flat_stove_1 (100), release 1 (109), grasp 2 (203), 
   function exPlay(on) { if (on) { var p = exv.play(); if (p && p.catch) p.catch(function () {}); } else exv.pause(); $("ex-play").textContent = on ? "Pause" : "Play"; }
   function exSelect(a, b, name, b1, mark, go) {
     exClear(); b1.setAttribute("aria-pressed", "true"); mark.classList.add("on"); exRange = [a, b];
-    exLabel("l3", "L3", "clip of " + (name === "end" ? "the episode end" : name), "steps " + a + "–" + b);
+    exLabel("l3", "clip", (name === "end" ? "episode end" : name), "steps " + a + "–" + b);
     try { exv.currentTime = a / FPS; } catch (e) {} exPlay(go);
   }
   KF.forEach(function (k, i) {
     var b = el("button", "kfb"); b.type = "button"; b.appendChild(kfCell(i)); b.setAttribute("aria-pressed", "false");
     b.setAttribute("aria-label", "Keyframe " + (i + 1) + ", step " + k[0] + (k[1] ? ", " + k[1] : ""));
     b.dataset.tip = "Keyframe " + (i + 1) + " · step " + k[0] + (k[1] ? " · " + k[1] : "");
-    b.addEventListener("click", function () { exClear(); b.setAttribute("aria-pressed", "true"); exRange = null; exPlay(false); try { exv.currentTime = k[0] / FPS; } catch (e) {} exLabel("l0", "L0", "keyframe " + (i + 1) + (k[1] ? " · " + k[1] : ""), "step " + k[0]); });
+    b.addEventListener("click", function () { exClear(); b.setAttribute("aria-pressed", "true"); exRange = null; exPlay(false); try { exv.currentTime = k[0] / FPS; } catch (e) {} exLabel("l0", "keyframe", (i + 1) + (k[1] ? " · " + k[1] : ""), "step " + k[0]); });
     $("ex-kf").appendChild(b); exBtns.push(b);
     var t = el("i", "tick"); t.style.left = pct(k[0]); $("lane-kf").appendChild(t);
   });
